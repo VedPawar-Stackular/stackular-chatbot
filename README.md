@@ -102,4 +102,4 @@ The Warning Explained<br>
 Open your web browser and navigate to:
 `http://localhost:3000`
 
-![Chatbot User Interface](assests\chatbot-ui.png)
+![Chatbot User Interface](assests/chatbot-ui.png)
