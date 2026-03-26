@@ -138,15 +138,41 @@ export default function ChatWidget() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ question, session_id: sessionId }),
       });
-      const data = await res.json();
-      setMessages(prev => [...prev, { role: 'bot', text: data.answer }]);
-    } catch {
+
+      if (!res.ok) throw new Error('API Error');
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let fullText = '';
+      let isFirstChunk = true;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value, { stream: true });
+        fullText += chunk;
+
+        if (isFirstChunk && chunk.trim()) {
+          setIsLoading(false);
+          setMessages(prev => [...prev, { role: 'bot', text: fullText }]);
+          isFirstChunk = false;
+        } else if (!isFirstChunk) {
+          setMessages(prev => {
+            const newMessages = [...prev];
+            newMessages[newMessages.length - 1] = { role: 'bot', text: fullText };
+            return newMessages;
+          });
+        }
+      }
+    } catch (err) {
+      console.error('Streaming error:', err);
+      setIsLoading(false);
       setMessages(prev => [...prev, {
         role: 'bot',
         text: 'I\'m having trouble connecting right now. Please visit [stackular.co](https://www.stackular.co) directly.'
       }]);
     }
-
     setIsLoading(false);
   };
 

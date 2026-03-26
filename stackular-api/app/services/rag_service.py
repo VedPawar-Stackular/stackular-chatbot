@@ -120,15 +120,13 @@ def get_history(session_id: str, limit: int = 3) -> str:
         formatted += f"Visitor: {turn['q']}\nAssistant: {turn['a']}\n"
     return formatted
 
-def rag_answer(question: str, index, embedder, session_id: str = None) -> str:
+async def rag_stream_answer(question: str, index, embedder, session_id: str = None):
     chunks = retrieve(question, index, embedder)
     context = "\n\n".join(chunks)
     
     history_context = get_history(session_id)
 
     question_lower = question.lower()
-    relevant_url = next((url for keyword, url in SOURCE_URLS.items() if keyword in question_lower), "https://www.stackular.com")
-
     text = "My expertise is focused on Stackular's services, industries, and company. For anything else, here's how to reach the team: [Contact Stackular](https://www.stackular.com/contact-us)"
 
     prompt = f"""You are a concise, friendly assistant embedded on the Stackular website.
@@ -194,16 +192,31 @@ Visitor's question: {question}
 Answer:"""
 
     llm = ChatGroq(model="llama-3.3-70b-versatile", api_key=settings.GROQ_API_KEY, temperature=0.7)
-    response = llm.invoke([HumanMessage(content=prompt)])
-    answer = response.content
+    
+    full_answer = ""
+    async for chunk in llm.astream([HumanMessage(content=prompt)]):
+        content = chunk.content
+        full_answer += content
+        yield content
 
-    # Store in history if session exists
+    # Store in history if session exists after stream finished
     if session_id:
         if session_id not in CHAT_HISTORY:
             CHAT_HISTORY[session_id] = []
-        CHAT_HISTORY[session_id].append({"q": question, "a": answer})
-        # Keep history manageable
+        CHAT_HISTORY[session_id].append({"q": question, "a": full_answer})
         if len(CHAT_HISTORY[session_id]) > 10:
             CHAT_HISTORY[session_id].pop(0)
 
-    return answer
+def rag_answer(question: str, index, embedder, session_id: str = None) -> str:
+    # Keep the synchronous version for compatibility if needed, 
+    # but we'll primarily use the stream in the route.
+    import asyncio
+    
+    async def get_all():
+        ans = ""
+        async for chunk in rag_stream_answer(question, index, embedder, session_id):
+            ans += chunk
+        return ans
+    
+    return asyncio.run(get_all())
+
