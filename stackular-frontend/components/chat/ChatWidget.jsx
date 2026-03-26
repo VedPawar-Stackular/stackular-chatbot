@@ -110,8 +110,15 @@ export default function ChatWidget() {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(true);
+  const [sessionId, setSessionId] = useState('');
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
+
+  useEffect(() => {
+    // Generate a simple unique session ID on mount
+    const newSessionId = Math.random().toString(36).substring(2, 11) + Date.now().toString(36);
+    setSessionId(newSessionId);
+  }, []);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -129,7 +136,7 @@ export default function ChatWidget() {
       const res = await fetch(`${API_URL}/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question }),
+        body: JSON.stringify({ question, session_id: sessionId }),
       });
       const data = await res.json();
       setMessages(prev => [...prev, { role: 'bot', text: data.answer }]);

@@ -104,9 +104,27 @@ def retrieve(question: str, index, embedder, top_k: int = 3) -> list:
     results = index.query(vector=q_embedding, top_k=top_k, include_metadata=True)
     return [match["metadata"]["text"] for match in results["matches"]]
 
-def rag_answer(question: str, index, embedder) -> str:
+# In-memory session-based chat history store
+CHAT_HISTORY = {}
+
+def get_history(session_id: str, limit: int = 3) -> str:
+    if not session_id or session_id not in CHAT_HISTORY:
+        return ""
+    
+    history_items = CHAT_HISTORY[session_id][-limit:]
+    if not history_items:
+        return ""
+        
+    formatted = "\n--- Recent Conversation History ---\n"
+    for turn in history_items:
+        formatted += f"Visitor: {turn['q']}\nAssistant: {turn['a']}\n"
+    return formatted
+
+def rag_answer(question: str, index, embedder, session_id: str = None) -> str:
     chunks = retrieve(question, index, embedder)
     context = "\n\n".join(chunks)
+    
+    history_context = get_history(session_id)
 
     question_lower = question.lower()
     relevant_url = next((url for keyword, url in SOURCE_URLS.items() if keyword in question_lower), "https://www.stackular.com")
@@ -117,8 +135,11 @@ def rag_answer(question: str, index, embedder) -> str:
 Stackular is a software consulting and development company. 
 
 CRITICAL: When the user says "this company", "we", "our", "you guys", or "the firm", they are referring to Stackular. Always assume the context is Stackular unless explicitly stated otherwise.
+Use the "Recent Conversation History" below to understand context, resolve pronouns (like "he", "they", "it"), and provide a cohesive experience.
 
 You help website visitors — potential clients, job applicants, or general visitors — get clear answers about Stackular.
+
+{history_context}
 
 ---
 ## RESPONSE RULES
@@ -174,4 +195,15 @@ Answer:"""
 
     llm = ChatGroq(model="llama-3.3-70b-versatile", api_key=settings.GROQ_API_KEY, temperature=0.7)
     response = llm.invoke([HumanMessage(content=prompt)])
-    return response.content
+    answer = response.content
+
+    # Store in history if session exists
+    if session_id:
+        if session_id not in CHAT_HISTORY:
+            CHAT_HISTORY[session_id] = []
+        CHAT_HISTORY[session_id].append({"q": question, "a": answer})
+        # Keep history manageable
+        if len(CHAT_HISTORY[session_id]) > 10:
+            CHAT_HISTORY[session_id].pop(0)
+
+    return answer

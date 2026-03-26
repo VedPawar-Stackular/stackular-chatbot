@@ -7,5 +7,5 @@ router = APIRouter()
 
 @router.post("/chat", response_model=ChatResponse)
 def chat(request: ChatRequest, index=Depends(get_index), embedder=Depends(get_embedder)):
-    answer = rag_answer(request.question, index, embedder)
+    answer = rag_answer(request.question, index, embedder, request.session_id)
     return ChatResponse(answer=answer)
