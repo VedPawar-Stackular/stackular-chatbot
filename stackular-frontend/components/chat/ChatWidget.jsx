@@ -16,13 +16,14 @@ function TypingIndicator() {
     <div style={{ display: 'flex', alignSelf: 'flex-start', maxWidth: '85%' }}>
       <div style={{
         padding: '10px 14px',
-        background: '#f3f4f6',
+        background: 'rgba(255, 255, 255, 0.04)',
+        border: '0.5px solid rgba(255, 255, 255, 0.08)',
         borderRadius: '12px 12px 12px 3px',
         display: 'flex', gap: '4px', alignItems: 'center'
       }}>
         {[0, 1, 2].map(i => (
           <span key={i} style={{
-            width: 6, height: 6, borderRadius: '50%', background: '#9ca3af',
+            width: 6, height: 6, borderRadius: '50%', background: 'rgba(255, 255, 255, 0.4)',
             animation: 'bounce 1.2s infinite',
             animationDelay: `${i * 0.2}s`,
             display: 'inline-block'
@@ -36,32 +37,64 @@ function TypingIndicator() {
 function Message({ role, text }) {
   const isBot = role === 'bot';
 
-  // Simple markdown renderer for bold and links
+  // Robust markdown renderer for bold text and hyperlinks
   const renderText = (str) => {
-    const parts = str.split(/(\*\*.*?\*\*|\[.*?\]\(.*?\))/g);
+    if (!str) return null;
+    
+    // Pattern to match [link text](url) and **bold text**
+    const regex = /(\[.*?\]\(.*?\))|(\*\*.*?\*\*)/g;
+    const parts = str.split(regex);
+    
     return parts.map((part, i) => {
+      if (!part) return null;
+
+      // Handle Markdown Link: [text](url)
+      if (part.startsWith('[') && part.includes('](') && part.endsWith(')')) {
+        const linkMatch = part.match(/\[(.*?)\]\((.*?)\)/);
+        if (linkMatch) {
+          return (
+            <a 
+              key={i} 
+              href={linkMatch[2]} 
+              target="_blank" 
+              rel="noopener noreferrer"
+              style={{ 
+                color: '#1d6ef5', 
+                textDecoration: 'underline', 
+                fontWeight: 600,
+                transition: 'opacity 0.2s'
+              }}
+              onMouseEnter={e => e.currentTarget.style.opacity = '0.8'}
+              onMouseLeave={e => e.currentTarget.style.opacity = '1'}
+            >
+              {linkMatch[1]}
+            </a>
+          );
+        }
+      }
+
+      // Handle Markdown Bold: **text**
       if (part.startsWith('**') && part.endsWith('**')) {
-        return <strong key={i}>{part.slice(2, -2)}</strong>;
+        return <strong key={i} style={{ color: '#fff', fontWeight: 700 }}>{part.slice(2, -2)}</strong>;
       }
-      const linkMatch = part.match(/\[(.*?)\]\((.*?)\)/);
-      if (linkMatch) {
-        return <a key={i} href={linkMatch[2]} target="_blank" rel="noopener noreferrer"
-          style={{ color: '#4f8ef7', textDecoration: 'none' }}>{linkMatch[1]}</a>;
-      }
-      return part;
+
+      // Return plain text
+      return <span key={i}>{part}</span>;
     });
   };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignSelf: isBot ? 'flex-start' : 'flex-end', maxWidth: '85%' }}>
       <div style={{
-        padding: '9px 12px',
+        padding: '10px 14px',
         borderRadius: isBot ? '12px 12px 12px 3px' : '12px 12px 3px 12px',
         fontSize: 13,
-        lineHeight: 1.5,
-        background: isBot ? '#f3f4f6' : '#1a1a2e',
-        color: isBot ? '#111827' : '#ffffff',
+        lineHeight: 1.55,
+        background: isBot ? 'rgba(255, 255, 255, 0.05)' : '#1d6ef5',
+        color: '#ffffff',
+        border: isBot ? '0.5px solid rgba(255, 255, 255, 0.1)' : 'none',
         whiteSpace: 'pre-wrap',
+        boxShadow: isBot ? 'none' : '0 4px 12px rgba(29, 110, 245, 0.2)',
       }}>
         {renderText(text)}
       </div>
@@ -72,7 +105,7 @@ function Message({ role, text }) {
 export default function ChatWidget() {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState([
-    { role: 'bot', text: "Hi! I'm Stackular's assistant. Ask me anything about our services, team, or how we can help your business. 👋" }
+    { role: 'bot', text: "Welcome to Stackular! How can we help you today? 👋" }
   ]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -103,7 +136,7 @@ export default function ChatWidget() {
     } catch {
       setMessages(prev => [...prev, {
         role: 'bot',
-        text: 'I\'m having trouble connecting right now. Please visit [stackular.com](https://www.stackular.com) directly.'
+        text: 'I\'m having trouble connecting right now. Please visit [stackular.co](https://www.stackular.co) directly.'
       }]);
     }
 
@@ -124,14 +157,14 @@ export default function ChatWidget() {
   };
 
   return (
-    <>
+    <div style={{ fontFamily: "'Inter', 'Segoe UI', sans-serif" }}>
       <style>{`
         @keyframes bounce {
           0%, 60%, 100% { transform: translateY(0); }
           30% { transform: translateY(-5px); }
         }
         @keyframes widgetOpen {
-          from { opacity: 0; transform: scale(0.85) translateY(10px); }
+          from { opacity: 0; transform: scale(0.92) translateY(12px); }
           to   { opacity: 1; transform: scale(1) translateY(0); }
         }
       `}</style>
@@ -140,23 +173,29 @@ export default function ChatWidget() {
       <button
         onClick={() => setIsOpen(o => !o)}
         style={{
-          position: 'fixed', bottom: 24, right: 24,
-          width: 52, height: 52, borderRadius: '50%',
-          background: '#1a1a2e', border: 'none', cursor: 'pointer',
+          position: 'fixed', bottom: 32, right: 32,
+          width: 56, height: 56, borderRadius: '50%',
+          background: '#1d6ef5', border: 'none', cursor: 'pointer',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          zIndex: 9999, transition: 'transform 0.2s ease',
-          boxShadow: '0 4px 16px rgba(0,0,0,0.18)',
+          zIndex: 9999, transition: 'all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
+          boxShadow: '0 8px 24px rgba(29, 110, 245, 0.35)',
         }}
-        onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.08)'}
-        onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
+        onMouseEnter={e => {
+          e.currentTarget.style.transform = 'scale(1.1) rotate(5deg)';
+          e.currentTarget.style.boxShadow = '0 12px 32px rgba(29, 110, 245, 0.5)';
+        }}
+        onMouseLeave={e => {
+          e.currentTarget.style.transform = 'scale(1) rotate(0deg)';
+          e.currentTarget.style.boxShadow = '0 8px 24px rgba(29, 110, 245, 0.35)';
+        }}
         aria-label="Open chat"
       >
         {isOpen ? (
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="white">
-            <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="white">
+            <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" stroke="white" strokeWidth="0.5"/>
           </svg>
         ) : (
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="white">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="white">
             <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/>
           </svg>
         )}
@@ -165,43 +204,49 @@ export default function ChatWidget() {
       {/* Chat panel */}
       {isOpen && (
         <div style={{
-          position: 'fixed', bottom: 88, right: 24,
-          width: 340, height: 480,
-          background: '#ffffff', borderRadius: 16,
-          border: '0.5px solid rgba(0,0,0,0.1)',
+          position: 'fixed', bottom: 104, right: 32,
+          width: 360, height: 520,
+          background: 'rgba(6, 11, 20, 0.96)', 
+          backdropFilter: 'blur(20px)',
+          borderRadius: 20,
+          border: '1px solid rgba(255, 255, 255, 0.08)',
           display: 'flex', flexDirection: 'column',
           overflow: 'hidden', zIndex: 9998,
-          boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
-          animation: 'widgetOpen 0.25s cubic-bezier(0.34, 1.56, 0.64, 1)',
+          boxShadow: '0 12px 48px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.05)',
+          animation: 'widgetOpen 0.4s cubic-bezier(0.16, 1, 0.3, 1)',
         }}>
 
           {/* Header */}
           <div style={{
-            background: '#1a1a2e', padding: '14px 16px',
-            display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0,
+            background: 'rgba(255, 255, 255, 0.02)', 
+            padding: '18px 20px',
+            display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0,
+            borderBottom: '1px solid rgba(255, 255, 255, 0.06)',
           }}>
             <div style={{
-              width: 32, height: 32, borderRadius: '50%',
-              background: 'rgba(255,255,255,0.15)',
+              width: 36, height: 36, borderRadius: 8,
+              background: 'rgba(29, 110, 245, 0.1)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
             }}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="rgba(255,255,255,0.9)">
-                <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/>
+              <svg width="22" height="22" viewBox="0 0 32 32" fill="none">
+                <rect width="10" height="10" rx="2" fill="#1d6ef5"/>
+                <rect x="13" width="10" height="10" rx="2" fill="#1d6ef5" opacity="0.6"/>
+                <rect y="13" width="10" height="10" rx="2" fill="#1d6ef5" opacity="0.6"/>
               </svg>
             </div>
             <div>
-              <p style={{ margin: 0, fontSize: 13, fontWeight: 500, color: '#fff' }}>Stackular Assistant</p>
-              <p style={{ margin: 0, fontSize: 11, color: 'rgba(255,255,255,0.6)', display: 'flex', alignItems: 'center', gap: 4 }}>
-                <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#4ade80', display: 'inline-block' }} />
-                Online · replies instantly
+              <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: '#fff', letterSpacing: '0.01em' }}>STACKULAR</p>
+              <p style={{ margin: 0, fontSize: 11, color: 'rgba(255, 255, 255, 0.45)', display: 'flex', alignItems: 'center', gap: 5 }}>
+                <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#4ade80', display: 'inline-block' }} />
+                AI Assistant · Active
               </p>
             </div>
           </div>
 
           {/* Messages */}
           <div style={{
-            flex: 1, overflowY: 'auto', padding: '14px 14px 8px',
-            display: 'flex', flexDirection: 'column', gap: 10,
+            flex: 1, overflowY: 'auto', padding: '20px',
+            display: 'flex', flexDirection: 'column', gap: 14,
           }}>
             {messages.map((msg, i) => <Message key={i} role={msg.role} text={msg.text} />)}
             {isLoading && <TypingIndicator />}
@@ -210,63 +255,81 @@ export default function ChatWidget() {
 
           {/* Suggestion chips */}
           {showSuggestions && (
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, padding: '0 14px 10px', flexShrink: 0 }}>
-              {SUGGESTIONS.map(s => (
-                <button key={s} onClick={() => handleChip(s)} style={{
-                  fontSize: 11, padding: '5px 10px',
-                  border: '0.5px solid #e5e7eb', borderRadius: 20,
-                  background: '#fff', color: '#6b7280',
-                  cursor: 'pointer', fontFamily: 'inherit',
-                  transition: 'background 0.15s',
-                }}
-                  onMouseEnter={e => { e.currentTarget.style.background = '#f9fafb'; e.currentTarget.style.color = '#111827'; }}
-                  onMouseLeave={e => { e.currentTarget.style.background = '#fff'; e.currentTarget.style.color = '#6b7280'; }}
-                >
-                  {s}
-                </button>
-              ))}
+            <div style={{ display: 'flex', overflowX: 'auto', gap: 8, padding: '0 20px 16px', flexShrink: 0, scrollbarWidth: 'none' }}>
+              <style>{`.hide-scrollbar::-webkit-scrollbar { display: none; }`}</style>
+              <div className="hide-scrollbar" style={{ display: 'flex', gap: 8 }}>
+                {SUGGESTIONS.map(s => (
+                  <button key={s} onClick={() => handleChip(s)} style={{
+                    fontSize: 11, padding: '7px 14px',
+                    border: '1px solid rgba(255, 255, 255, 0.15)', 
+                    borderRadius: 8,
+                    background: 'transparent', 
+                    color: 'rgba(255, 255, 255, 0.7)',
+                    cursor: 'pointer', fontFamily: 'inherit',
+                    transition: 'all 0.2s ease',
+                    whiteSpace: 'nowrap',
+                  }}
+                    onMouseEnter={e => { 
+                      e.currentTarget.style.background = 'rgba(29, 110, 245, 0.1)'; 
+                      e.currentTarget.style.borderColor = '#1d6ef5';
+                      e.currentTarget.style.color = '#fff';
+                    }}
+                    onMouseLeave={e => { 
+                      e.currentTarget.style.background = 'transparent'; 
+                      e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.15)';
+                      e.currentTarget.style.color = 'rgba(255, 255, 255, 0.7)';
+                    }}
+                  >
+                    {s}
+                  </button>
+                ))}
+              </div>
             </div>
           )}
 
           {/* Input row */}
           <div style={{
-            display: 'flex', alignItems: 'center', gap: 8,
-            padding: '10px 12px', borderTop: '0.5px solid #f3f4f6', flexShrink: 0,
+            background: 'rgba(0,0,0,0.2)',
+            display: 'flex', alignItems: 'center', gap: 12,
+            padding: '14px 16px', borderTop: '1px solid rgba(255, 255, 255, 0.06)', flexShrink: 0,
           }}>
             <input
               ref={inputRef}
               value={input}
               onChange={e => setInput(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && handleSend()}
-              placeholder="Ask a question..."
+              placeholder="Type your message..."
               style={{
                 flex: 1, border: 'none', background: 'transparent',
                 fontSize: 13, fontFamily: 'inherit', outline: 'none',
-                color: '#111827',
+                color: '#ffffff',
               }}
             />
             <button
               onClick={handleSend}
               disabled={isLoading || !input.trim()}
               style={{
-                width: 30, height: 30, borderRadius: '50%',
-                background: isLoading || !input.trim() ? '#e5e7eb' : '#1a1a2e',
+                width: 36, height: 36, borderRadius: 10,
+                background: isLoading || !input.trim() ? 'rgba(255, 255, 255, 0.05)' : '#1d6ef5',
                 border: 'none', cursor: isLoading || !input.trim() ? 'not-allowed' : 'pointer',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                transition: 'background 0.15s', flexShrink: 0,
+                transition: 'all 0.2s ease', flexShrink: 0,
+                boxShadow: isLoading || !input.trim() ? 'none' : '0 4px 12px rgba(29, 110, 245, 0.3)',
               }}
             >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="white">
-                <path d="M2 21l21-9L2 3v7l15 2-15 2v7z"/>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="white">
+                <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
               </svg>
             </button>
           </div>
 
-          <p style={{ textAlign: 'center', fontSize: 10, color: '#9ca3af', padding: '0 0 8px', margin: 0, flexShrink: 0 }}>
-            Powered by Stackular AI
-          </p>
+          <div style={{ background: 'rgba(0,0,0,0.2)', textAlign: 'center', padding: '0 0 10px', flexShrink: 0 }}>
+             <p style={{ fontSize: 9, color: 'rgba(255,255,255,0.25)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              Engineered by Stackular
+            </p>
+          </div>
         </div>
       )}
-    </>
+    </div>
   );
 }
