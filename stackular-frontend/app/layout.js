@@ -1,4 +1,4 @@
-import ChatWidget from '@/components/ChatWidget';
+import ChatWidget from '@/components/chat/ChatWidget';
 
 export const metadata = {
   title: 'Stackular — Scaling customer success, one stack at a time.',

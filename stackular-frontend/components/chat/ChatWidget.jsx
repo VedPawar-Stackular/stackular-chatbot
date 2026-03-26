@@ -8,6 +8,7 @@ const SUGGESTIONS = [
   'What services do you offer?',
   'Who founded Stackular?',
   'Open positions',
+  'Contact Information'
 ];
 
 function TypingIndicator() {

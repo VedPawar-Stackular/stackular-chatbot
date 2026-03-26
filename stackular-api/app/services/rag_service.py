@@ -1,18 +1,13 @@
-# rag.py
-
-from sentence_transformers import SentenceTransformer
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_groq import ChatGroq
 from langchain_core.messages import HumanMessage
-from pinecone import Pinecone
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
 from webdriver_manager.chrome import ChromeDriverManager
 from bs4 import BeautifulSoup
-import os
 import time
-from langchain_openai import ChatOpenAI
+from app.core.config import settings
 
 STACKULAR_PAGES = [
     "https://www.stackular.com/",
@@ -50,17 +45,13 @@ SOURCE_URLS = {
     "about": "https://www.stackular.com/about",
 }
 
-
 def scrape_page(url: str) -> str:
     try:
         options = Options()
         options.add_argument("--headless")
         options.add_argument("--no-sandbox")
         options.add_argument("--disable-dev-shm-usage")
-        driver = webdriver.Chrome(
-            service=Service(ChromeDriverManager().install()),
-            options=options
-        )
+        driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
         driver.get(url)
         time.sleep(3)
         soup = BeautifulSoup(driver.page_source, "html.parser")
@@ -71,7 +62,6 @@ def scrape_page(url: str) -> str:
     except Exception as e:
         print(f"Failed to scrape {url}: {e}")
         return ""
-
 
 def build_index_if_empty(index, embedder):
     stats = index.describe_index_stats()
@@ -91,11 +81,7 @@ def build_index_if_empty(index, embedder):
 
     raw_texts.extend(CURATED_FACTS)
 
-    splitter = RecursiveCharacterTextSplitter(
-        chunk_size=500,
-        chunk_overlap=50,
-        separators=["\n\n", "\n", ".", " "]
-    )
+    splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50, separators=["\n\n", "\n", ".", " "])
     all_chunks = []
     for text in raw_texts:
         all_chunks.extend(splitter.split_text(text))
@@ -104,11 +90,7 @@ def build_index_if_empty(index, embedder):
     embeddings = embedder.encode(all_chunks, show_progress_bar=True)
 
     vectors = [
-        {
-            "id": f"chunk_{i}",
-            "values": emb.tolist(),
-            "metadata": {"text": chunk}
-        }
+        {"id": f"chunk_{i}", "values": emb.tolist(), "metadata": {"text": chunk}}
         for i, (chunk, emb) in enumerate(zip(all_chunks, embeddings))
     ]
 
@@ -117,26 +99,17 @@ def build_index_if_empty(index, embedder):
 
     print("OK: RAG index ready.")
 
-
-def retrieve(question: str, index, embedder, top_k: int = 3) -> list[str]:
+def retrieve(question: str, index, embedder, top_k: int = 3) -> list:
     q_embedding = embedder.encode([question]).tolist()[0]
-    results = index.query(
-        vector=q_embedding,
-        top_k=top_k,
-        include_metadata=True
-    )
+    results = index.query(vector=q_embedding, top_k=top_k, include_metadata=True)
     return [match["metadata"]["text"] for match in results["matches"]]
-
 
 def rag_answer(question: str, index, embedder) -> str:
     chunks = retrieve(question, index, embedder)
     context = "\n\n".join(chunks)
 
     question_lower = question.lower()
-    relevant_url = next(
-        (url for keyword, url in SOURCE_URLS.items() if keyword in question_lower),
-        "https://www.stackular.com"
-    )
+    relevant_url = next((url for keyword, url in SOURCE_URLS.items() if keyword in question_lower), "https://www.stackular.com")
 
     text = "My expertise is focused on Stackular's services, industries, and company. For anything else, here's how to reach the team: [Contact Stackular](https://www.stackular.com/contact-us)"
 
@@ -146,67 +119,47 @@ Stackular is a software consulting and development company based in Columbia, Ma
 You help website visitors — potential clients, job applicants, or general visitors — get clear answers about Stackular.
 
 ---
-
 ## RESPONSE RULES
 
 ### RULE 1 — Answer length
 - Always answer in 1–2 sentences maximum.
-- Never pad answers with phrases like "you can find more information", "feel free to contact us", or "visit our website" UNLESS the visitor explicitly asks for contact details or more information.
-- For greetings (Hi, Hello, Hey, etc.), respond warmly in one sentence only. No company pitch. No links.
+- Never pad answers with phrases like "you can find more information" UNLESS the visitor asks for contact.
+- For greetings, respond warmly in one sentence only. No company pitch. No links.
 
-### RULE 2 — Links are conditional, not automatic
+### RULE 2 — Links
 Only include a link if ONE of these is true:
-  (a) The visitor is asking about contact, careers, or privacy — use the designated links below.
-  (b) The context is incomplete and the link will directly answer what was asked.
-  (c) The visitor explicitly asks "where can I learn more" or similar.
-
-NEVER append a link just to be helpful. If the answer is in the context, the answer alone is sufficient.
-
-Designated links (use ONLY when condition above is met):
-- Contact questions → [Contact Stackular](https://www.stackular.com/contact-us#:~:text=info%40stackular.com,888)%20278%2D8667)
-- Career questions → [View open positions](https://www.stackular.com/joinus#:~:text=OUR%20CURRENT%20OPENINGS)
-- Privacy/data questions → [Privacy Policy](https://www.stackular.com/privacy-policy)
-- Portfolio questions → [View Portfolio](https://www.stackular.com/portfolio)
+  (a) Asking about contact, careers, or privacy.
+  (b) The context is incomplete and the link will answer what was asked.
+  (c) Visitor asks "where can I learn more".
+NEVER append a link just to be helpful.
 
 ### RULE 3 — Link placement
-When a link IS needed, place it on a new line AFTER the answer. Never embed it inside the answer sentence.
+When a link IS needed, place it on a new line AFTER the answer.
 
 ### RULE 4 — Lists
-Use bullet points only when listing 3 or more items. Never for single items.
+Use bullet points only when listing 3 or more items.
 
 ### RULE 5 — Off-topic questions
-If the question is unrelated to Stackular, respond with exactly:
+If the question is unrelated to Stackular, respond exactly:
 "{text}"
 
 ### RULE 6 — Missing information
-If the context does not contain the answer, say so briefly and point to the most relevant page. Never say "I don't have that information" in isolation.
+If the context does not contain the answer, say so briefly and point to the relevant page.
 
 ---
-
-## EXAMPLES (follow these exactly)
+## EXAMPLES
 
 Q: Hi
 A: Hello! Welcome to Stackular — feel free to ask me anything about our services or company. 👋
 
-Q: Where is Stackular located in India?
-A: Stackular's India office is located in Hyderabad.
-
 Q: Where is Stackular?
 A: Stackular is headquartered in Columbia, Maryland, USA, with an office in Hyderabad, India.
-
-Q: What projects has Stackular done?
-A: Stackular has worked across industries including Commercial and Hospitality, with projects featuring redesigned interfaces, unified entry points, and expanded offerings.
-[View Portfolio](https://www.stackular.com/portfolio)
 
 Q: How can I contact Stackular?
 A: You can reach the Stackular team directly here:
 [Contact Stackular](https://www.stackular.com/contact-us#:~:text=info%40stackular.com,888)%20278%2D8667)
 
-Q: What is the weather today?
-A: My expertise is focused on Stackular's services, industries, and company. For anything else, here's how to reach the team: [Contact Stackular](https://www.stackular.com/contact-us)
-
 ---
-
 Context from Stackular's website:
 {context}
 
@@ -214,17 +167,6 @@ Visitor's question: {question}
 
 Answer:"""
 
-    llm = ChatGroq(
-        model="llama-3.3-70b-versatile",
-        api_key=os.getenv("GROQ_API_KEY"),
-        temperature=0.7
-    )
-
-    # llm = ChatOpenAI(
-    #     model="google/gemini-2.0-flash-exp:free",
-    #     openai_api_key=os.getenv("OPENROUTER_API_KEY"),
-    #     openai_api_base="https://openrouter.ai",
-    #     temperature=0.7
-    # )
+    llm = ChatGroq(model="llama-3.3-70b-versatile", api_key=settings.GROQ_API_KEY, temperature=0.7)
     response = llm.invoke([HumanMessage(content=prompt)])
     return response.content
