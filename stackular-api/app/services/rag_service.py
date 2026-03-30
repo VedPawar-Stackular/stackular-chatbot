@@ -7,6 +7,7 @@ from selenium.webdriver.chrome.options import Options
 from webdriver_manager.chrome import ChromeDriverManager
 from bs4 import BeautifulSoup
 import time
+import asyncio
 from app.core.config import settings
 
 STACKULAR_PAGES = [
@@ -198,6 +199,7 @@ Answer:"""
         content = chunk.content
         full_answer += content
         yield content
+        await asyncio.sleep(0.09)  # Increase to slow down, decrease to speed up
 
     # Store in history if session exists after stream finished
     if session_id:
