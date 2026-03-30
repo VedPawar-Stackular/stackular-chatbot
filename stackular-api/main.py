@@ -27,11 +27,9 @@ def create_app() -> FastAPI:
         
     @app.on_event("startup")
     def startup_event():
-        print("Initializing models and indexes...")
-        index = get_index()
-        embedder = get_embedder()
-        build_index_if_empty(index, embedder)
-        print("API ready.")
+        # Removed pre-loading for instant startup. 
+        # Index and Embedder will lazy-load on the first /chat request.
+        print("API is fast-starting. Models will initialize on first request.")
 
     return app
 
