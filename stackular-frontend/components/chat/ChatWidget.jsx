@@ -4,6 +4,8 @@ import { useState, useRef, useEffect } from 'react';
 
 const API_URL = process.env.NEXT_PUBLIC_CHATBOT_API_URL || 'http://localhost:8000';
 
+const SpeechRecognition = typeof window !== 'undefined' && (window.SpeechRecognition || window.webkitSpeechRecognition);
+
 const SUGGESTIONS = [
   'What services do you offer?',
   'Who founded Stackular?',
@@ -111,8 +113,10 @@ export default function ChatWidget() {
   const [isLoading, setIsLoading] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(true);
   const [sessionId, setSessionId] = useState('');
+  const [isListening, setIsListening] = useState(false);
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
+  const recognitionRef = useRef(null);
 
   useEffect(() => {
     // Generate a simple unique session ID on mount
@@ -174,6 +178,36 @@ export default function ChatWidget() {
       }]);
     }
     setIsLoading(false);
+  };
+
+  const toggleListening = () => {
+    if (isListening) {
+      recognitionRef.current?.stop();
+      setIsListening(false);
+      return;
+    }
+
+    if (!SpeechRecognition) {
+      alert("Voice recognition is not supported in this browser.");
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognition.lang = 'en-US';
+
+    recognition.onstart = () => setIsListening(true);
+    recognition.onend = () => setIsListening(false);
+    recognition.onerror = () => setIsListening(false);
+    
+    recognition.onresult = (event) => {
+      const transcript = event.results[0][0].transcript;
+      setInput(transcript);
+    };
+
+    recognitionRef.current = recognition;
+    recognition.start();
   };
 
   const handleSend = () => {
@@ -326,12 +360,29 @@ export default function ChatWidget() {
             display: 'flex', alignItems: 'center', gap: 12,
             padding: '14px 16px', borderTop: '1px solid rgba(255, 255, 255, 0.06)', flexShrink: 0,
           }}>
+            <button
+              onClick={toggleListening}
+              style={{
+                background: isListening ? '#ef4444' : 'transparent',
+                border: 'none', cursor: 'pointer', padding: 4, borderRadius: '50%',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                transition: 'all 0.2s',
+                boxShadow: isListening ? '0 0 12px rgba(239, 68, 68, 0.4)' : 'none',
+                flexShrink: 0,
+              }}
+              title={isListening ? 'Stop Listening' : 'Voice Typing'}
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill={isListening ? 'white' : 'rgba(255,255,255,0.45)'}>
+                <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
+                <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
+              </svg>
+            </button>
             <input
               ref={inputRef}
               value={input}
               onChange={e => setInput(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && handleSend()}
-              placeholder="Type your message..."
+              placeholder={isListening ? "Listening..." : "Type your message..."}
               style={{
                 flex: 1, border: 'none', background: 'transparent',
                 fontSize: 13, fontFamily: 'inherit', outline: 'none',
