@@ -64,35 +64,42 @@ def scrape_page(url: str) -> str:
         print(f"Failed to scrape {url}: {e}")
         return ""
 
-def build_index_if_empty(index, embedder):
+def build_index_if_empty(index, embedder, force: bool = False):
     stats = index.describe_index_stats()
     vector_count = stats.get("total_vector_count", 0)
 
-    if vector_count > 0:
+    if vector_count > 0 and not force:
         print(f"OK: Pinecone index already has {vector_count} vectors. Skipping scrape.")
         return
 
+    if force:
+        print("Force re-indexing: Cleaning existing vectors...")
+        index.delete(delete_all=True)
+
     print("Building RAG index...")
-    raw_texts = []
+    splitter = RecursiveCharacterTextSplitter(chunk_size=600, chunk_overlap=100, separators=["\n\n", "\n", ".", " "])
+    all_chunks = []
+    metadatas = []
+
     for url in STACKULAR_PAGES:
         print(f"  Scraping: {url}")
         text = scrape_page(url)
         if text:
-            raw_texts.append(text)
+            chunks = splitter.split_text(text)
+            all_chunks.extend(chunks)
+            metadatas.extend([{"text": c, "source": url} for c in chunks])
 
-    raw_texts.extend(CURATED_FACTS)
-
-    splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50, separators=["\n\n", "\n", ".", " "])
-    all_chunks = []
-    for text in raw_texts:
-        all_chunks.extend(splitter.split_text(text))
+    for fact in CURATED_FACTS:
+        chunks = splitter.split_text(fact)
+        all_chunks.extend(chunks)
+        metadatas.extend([{"text": c, "source": "Company Fact Sheet"} for c in chunks])
 
     print(f"  Total chunks: {len(all_chunks)}")
     embeddings = embedder.encode(all_chunks, show_progress_bar=True)
 
     vectors = [
-        {"id": f"chunk_{i}", "values": emb.tolist(), "metadata": {"text": chunk}}
-        for i, (chunk, emb) in enumerate(zip(all_chunks, embeddings))
+        {"id": f"chunk_{i}_{int(time.time())}", "values": emb.tolist(), "metadata": meta}
+        for i, (emb, meta) in enumerate(zip(embeddings, metadatas))
     ]
 
     for i in range(0, len(vectors), 100):
@@ -100,10 +107,10 @@ def build_index_if_empty(index, embedder):
 
     print("OK: RAG index ready.")
 
-def retrieve(question: str, index, embedder, top_k: int = 3) -> list:
+def retrieve(question: str, index, embedder, top_k: int = 5) -> list:
     q_embedding = embedder.encode([question]).tolist()[0]
     results = index.query(vector=q_embedding, top_k=top_k, include_metadata=True)
-    return [match["metadata"]["text"] for match in results["matches"]]
+    return [match["metadata"] for match in results["matches"]]
 
 # In-memory session-based chat history store
 CHAT_HISTORY = {}
@@ -122,71 +129,38 @@ def get_history(session_id: str, limit: int = 3) -> str:
     return formatted
 
 async def rag_stream_answer(question: str, index, embedder, session_id: str = None):
-    chunks = retrieve(question, index, embedder)
-    context = "\n\n".join(chunks)
+    results = retrieve(question, index, embedder)
     
+    # Format context with sources
+    context_parts = []
+    for res in results:
+        context_parts.append(f"Content: {res['text']}\nSource: {res['source']}")
+            
+    context = "\n\n---\n\n".join(context_parts)
     history_context = get_history(session_id)
 
-    question_lower = question.lower()
-    text = "My expertise is focused on Stackular's services, industries, and company. For anything else, here's how to reach the team: [Contact Stackular](https://www.stackular.com/contact-us)"
+    prompt = f"""You are a senior AI Assistant for Stackular, a premier software consulting and development firm. 
+Your goal is to provide comprehensive, professional, and helpful responses to visitors.
 
-    prompt = f"""You are a concise, friendly assistant embedded on the Stackular website.
-Stackular is a software consulting and development company. 
-
-CRITICAL: When the user says "this company", "we", "our", "you guys", or "the firm", they are referring to Stackular. Always assume the context is Stackular unless explicitly stated otherwise.
-Use the "Recent Conversation History" below to understand context, resolve pronouns (like "he", "they", "it"), and provide a cohesive experience.
-
-You help website visitors — potential clients, job applicants, or general visitors — get clear answers about Stackular.
-
+---
+## CONTEXTUAL INFORMATION
 {history_context}
 
----
-## RESPONSE RULES
-
-### RULE 1 — Answer length
-- Always answer in 1–2 sentences maximum.
-- Never pad answers with phrases like "you can find more information" UNLESS specifically asked for a link or contact.
-- For greetings, respond warmly in one sentence.
-
-### RULE 2 — Links & Hyperlinks
-- Any URL provided MUST be formatted as a markdown hyperlink: `[Link Description](URL)`. 
-- Only include a link if:
-  (a) Asking about contact, careers, portfolio, or services.
-  (b) The context points to a specific page for more details.
-  (c) The visitor asks "where can I learn more".
-
-### RULE 3 — Link placement
-- Place hyperlinks on a new line AFTER the initial answer.
-
-### RULE 4 — Lists
-- Use bullet points only when listing 2 or more items.
-
-### RULE 5 — Off-topic questions
-- If the question is entirely unrelated to Stackular or professional services, respond exactly:
-"{text}"
-
-### RULE 6 — Missing information
-- If the provided context does not contain the specific answer, state that "the details are not explicitly mentioned in my current records" and provide a relevant link to the Stackular website (e.g., Contact or About page) in markdown format.
-
-### RULE 7 - Context Assumption
-- If the user asks a question like "Who founded this company?" or "What do you do?", answer based on Stackular's information provided in the context.
-
----
-## EXAMPLES
-
-Q: Hi
-A: Hello! Welcome to Stackular — feel free to ask me anything about our services or team. 👋
-
-Q: Who founded this company?
-A: Stackular was founded by Jason Storch and Venkat Varkala in 2015.
-
-Q: How can I contact you?
-A: You can reach the Stackular team directly through our contact page:
-[Contact Stackular](https://www.stackular.com/contact-us)
-
----
-Context from Stackular's website:
+### Context from Stackular's website:
 {context}
+
+---
+## RESPONSE GUIDELINES
+
+1. **Depth & Quality:** Provide detailed answers (1-3 paragraphs if needed) that fully address the visitor's query using the provided context. Avoid overly brief responses unless it's a simple greeting.
+2. **Professional Tone:** Maintain a helpful, high-end consulting firm "voice". Be clear, authoritative, and welcoming.
+3. **Pronoun Resolution:** When users say "you", "this company", or "the firm", they are referring to Stackular.
+4. **Citations & Links:** 
+   - If the information is specific to a service, project, or company detail, cite the source.
+   - At the end of your response, if relevant sources were used, add a "Learn More" section with markdown links.
+   - Example: For more details, visit our [Services Page](https://www.stackular.com/services/).
+5. **Off-topic:** if the question is unrelated to Stackular or its professional services, gently redirect them to contact the team: [Contact Stackular](https://www.stackular.com/contact-us).
+6. **Formatting:** Use bullet points for lists. Use bold text for key terms.
 
 Visitor's question: {question}
 
@@ -199,7 +173,7 @@ Answer:"""
         content = chunk.content
         full_answer += content
         yield content
-        await asyncio.sleep(0.09)  # Increase to slow down, decrease to speed up
+        await asyncio.sleep(0.9)  # Increase to slow down, decrease to speed up
 
     # Store in history if session exists after stream finished
     if session_id:
@@ -221,4 +195,3 @@ def rag_answer(question: str, index, embedder, session_id: str = None) -> str:
         return ans
     
     return asyncio.run(get_all())
-

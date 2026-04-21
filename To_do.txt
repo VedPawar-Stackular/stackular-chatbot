@@ -1,0 +1,4 @@
+1. The chatbot answers/interactions are not of the perfect length and don't give all the relevant information possible from the websites.
+2. The answers format and tone must be changed
+3. The scraping done from the webiste must update once in a while as the knowledge base gets outdated as changes are made to the website.
+4. Every question must answer in a format that is easy to understand and gives all the relevant information possible with the link to the specifc website page if the answer is related to any specific page on the website.
