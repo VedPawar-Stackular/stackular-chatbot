@@ -1,3 +1,4 @@
+import os
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_groq import ChatGroq
 from langchain_core.messages import HumanMessage
@@ -74,20 +75,29 @@ def build_index_if_empty(index, embedder, force: bool = False):
 
     if force:
         print("Force re-indexing: Cleaning existing vectors...")
-        index.delete(delete_all=True)
+        try:
+            index.delete(delete_all=True)
+        except Exception as e:
+            print(f"  Note: Namespace clear skipped or already empty: {e}")
 
-    print("Building RAG index...")
+    print("Building RAG index from local file...")
     splitter = RecursiveCharacterTextSplitter(chunk_size=600, chunk_overlap=100, separators=["\n\n", "\n", ".", " "])
     all_chunks = []
     metadatas = []
 
-    for url in STACKULAR_PAGES:
-        print(f"  Scraping: {url}")
-        text = scrape_page(url)
-        if text:
-            chunks = splitter.split_text(text)
-            all_chunks.extend(chunks)
-            metadatas.extend([{"text": c, "source": url} for c in chunks])
+    # Local file path
+    content_file = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))), "Stackular Website.txt")
+    
+    if os.path.exists(content_file):
+        print(f"  Reading local content from: {content_file}")
+        with open(content_file, "r", encoding="utf-8") as f:
+            text = f.read()
+        
+        chunks = splitter.split_text(text)
+        all_chunks.extend(chunks)
+        metadatas.extend([{"text": c, "source": "Stackular Official Website"} for c in chunks])
+    else:
+        print(f"  WARNING: Local content file not found at {content_file}. Skipping local ingestion.")
 
     for fact in CURATED_FACTS:
         chunks = splitter.split_text(fact)
@@ -138,7 +148,7 @@ async def rag_stream_answer(question: str, index, embedder, session_id: str = No
             
     context = "\n\n---\n\n".join(context_parts)
     history_context = get_history(session_id)
-
+    text = "My expertise is focused on Stackular's services, industries, and company. For anything else, here's how to reach the team: [Contact Stackular](https://www.stackular.com/contact-us)"
     prompt = f"""You are a senior AI Assistant for Stackular, a premier software consulting and development firm. 
 Your goal is to provide comprehensive, professional, and helpful responses to visitors.
 
@@ -161,8 +171,19 @@ Your goal is to provide comprehensive, professional, and helpful responses to vi
    - Example: For more details, visit our [Services Page](https://www.stackular.com/services/).
 5. **Off-topic:** if the question is unrelated to Stackular or its professional services, gently redirect them to contact the team: [Contact Stackular](https://www.stackular.com/contact-us).
 6. **Formatting:** Use bullet points for lists. Use bold text for key terms.
+7. Any URL provided MUST be formatted as a markdown hyperlink: `[Link Description](URL)`. Only include a link if:
+  (a) Asking about contact, careers, portfolio, or services.
+  (b) The context points to a specific page for more details.
+  (c) The visitor asks "where can I learn more".
+8. Any URL provided MUST be formatted as a markdown hyperlink: `[Link Description](URL)`.
+9. Place hyperlinks on a new line AFTER the initial answer.
+10. Use bullet points only when listing 2 or more items.
+11. If the question is entirely unrelated to Stackular or professional services, respond exactly:
+"{text}"
 
 Visitor's question: {question}
+
+Summarise the final response and provide the summary in the response.
 
 Answer:"""
 
@@ -173,7 +194,7 @@ Answer:"""
         content = chunk.content
         full_answer += content
         yield content
-        await asyncio.sleep(0.9)  # Increase to slow down, decrease to speed up
+        await asyncio.sleep(0.1)  # Increase to slow down, decrease to speed up
 
     # Store in history if session exists after stream finished
     if session_id:

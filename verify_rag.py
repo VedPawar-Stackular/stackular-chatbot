@@ -14,7 +14,7 @@ embedder = SentenceTransformer('BAAI/bge-small-en')
 
 def test_retrieval():
     print("Testing Retrieval with Metadata...")
-    question = "What services does Stackular offer?"
+    question = "What is Stackular's ownership mindset?"
     results = retrieve(question, index, embedder)
     
     if not results:
