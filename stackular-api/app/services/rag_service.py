@@ -1,5 +1,6 @@
 import os
-from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_text_splitters import RecursiveCharacterTextSplitter, MarkdownHeaderTextSplitter
+import re
 from langchain_groq import ChatGroq
 from langchain_core.messages import HumanMessage
 from selenium import webdriver
@@ -80,27 +81,43 @@ def build_index_if_empty(index, embedder, force: bool = False):
         except Exception as e:
             print(f"  Note: Namespace clear skipped or already empty: {e}")
 
-    print("Building RAG index from local file...")
-    splitter = RecursiveCharacterTextSplitter(chunk_size=600, chunk_overlap=100, separators=["\n\n", "\n", ".", " "])
+    print("Building RAG index from local markdown file...")
+    
+    text_splitter = RecursiveCharacterTextSplitter(chunk_size=600, chunk_overlap=100)
+    
     all_chunks = []
     metadatas = []
 
-    # Local file path
-    content_file = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))), "Stackular Website.txt")
+    content_file = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))), "knowledge_base.md")
     
     if os.path.exists(content_file):
         print(f"  Reading local content from: {content_file}")
         with open(content_file, "r", encoding="utf-8") as f:
             text = f.read()
         
-        chunks = splitter.split_text(text)
-        all_chunks.extend(chunks)
-        metadatas.extend([{"text": c, "source": "Stackular Official Website"} for c in chunks])
+        # Split by main sections to ensure Source URL maps reliably to all sub-content
+        sections = re.split(r'\n(?=# )', text)
+        
+        for section in sections:
+            if not section.strip():
+                continue
+            
+            source_match = re.search(r"> \[Source:\s*(https?://[^\s\]]+)\]", section)
+            source_url = source_match.group(1) if source_match else "Stackular Official Website"
+            
+            # Clean metadata tags so they aren't embedded
+            clean_text = re.sub(r"> \[Source:.*?\]\n?", "", section)
+            clean_text = re.sub(r"> \[Category:.*?\]\n?", "", clean_text)
+            
+            splits = text_splitter.split_text(clean_text)
+            for split in splits:
+                all_chunks.append(split)
+                metadatas.append({"text": split, "source": source_url})
     else:
         print(f"  WARNING: Local content file not found at {content_file}. Skipping local ingestion.")
 
     for fact in CURATED_FACTS:
-        chunks = splitter.split_text(fact)
+        chunks = text_splitter.split_text(fact)
         all_chunks.extend(chunks)
         metadatas.extend([{"text": c, "source": "Company Fact Sheet"} for c in chunks])
 
@@ -169,21 +186,17 @@ Your goal is to provide comprehensive, professional, and helpful responses to vi
    - If the information is specific to a service, project, or company detail, cite the source.
    - At the end of your response, if relevant sources were used, add a "Learn More" section with markdown links.
    - Example: For more details, visit our [Services Page](https://www.stackular.com/services/).
-5. **Off-topic:** if the question is unrelated to Stackular or its professional services, gently redirect them to contact the team: [Contact Stackular](https://www.stackular.com/contact-us).
-6. **Formatting:** Use bullet points for lists. Use bold text for key terms.
+5. **Off-topic:** If the question is entirely unrelated to Stackular or professional services, respond exactly:
+"{text}"
+6. **Formatting constraints for readability (CRITICAL):** 
+   - Never write massive, continuous blocks of text. Break your responses into distinct, short paragraphs (1-3 sentences maximum per paragraph).
+   - Whenever you list more than two items (e.g., a list of services or features), you MUST format them as a vertical bulleted list, each on its own line.
 7. Any URL provided MUST be formatted as a markdown hyperlink: `[Link Description](URL)`. Only include a link if:
   (a) Asking about contact, careers, portfolio, or services.
-  (b) The context points to a specific page for more details.
-  (c) The visitor asks "where can I learn more".
-8. Any URL provided MUST be formatted as a markdown hyperlink: `[Link Description](URL)`.
-9. Place hyperlinks on a new line AFTER the initial answer.
-10. Use bullet points only when listing 2 or more items.
-11. If the question is entirely unrelated to Stackular or professional services, respond exactly:
-"{text}"
+  (b) Providing a specific URL citation based on the context.
+8. Place hyperlinks on a new line at the very end of your response.
 
 Visitor's question: {question}
-
-Summarise the final response and provide the summary in the response.
 
 Answer:"""
 
