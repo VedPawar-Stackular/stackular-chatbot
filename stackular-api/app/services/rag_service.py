@@ -66,6 +66,20 @@ def scrape_page(url: str) -> str:
         print(f"Failed to scrape {url}: {e}")
         return ""
 
+from pinecone_text.sparse import BM25Encoder
+import json
+
+def hybrid_score_norm(dense, sparse, alpha: float):
+    """Hybrid score using convex combination."""
+    if alpha < 0 or alpha > 1:
+        raise ValueError("Alpha must be between 0 and 1")
+    hdense = [v * alpha for v in dense]
+    hsparse = {
+        'indices': sparse['indices'],
+        'values':  [v * (1 - alpha) for v in sparse['values']]
+    }
+    return hdense, hsparse
+
 def build_index_if_empty(index, embedder, force: bool = False):
     stats = index.describe_index_stats()
     vector_count = stats.get("total_vector_count", 0)
@@ -88,14 +102,15 @@ def build_index_if_empty(index, embedder, force: bool = False):
     all_chunks = []
     metadatas = []
 
-    content_file = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))), "knowledge_base.md")
+    content_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+    content_file = os.path.join(content_dir, "knowledge_base.md")
+    bm25_path = os.path.join(content_dir, "bm25_params.json")
     
     if os.path.exists(content_file):
         print(f"  Reading local content from: {content_file}")
         with open(content_file, "r", encoding="utf-8") as f:
             text = f.read()
         
-        # Split by main sections to ensure Source URL maps reliably to all sub-content
         sections = re.split(r'\n(?=# )', text)
         
         for section in sections:
@@ -105,7 +120,6 @@ def build_index_if_empty(index, embedder, force: bool = False):
             source_match = re.search(r"> \[Source:\s*(https?://[^\s\]]+)\]", section)
             source_url = source_match.group(1) if source_match else "Stackular Official Website"
             
-            # Clean metadata tags so they aren't embedded
             clean_text = re.sub(r"> \[Source:.*?\]\n?", "", section)
             clean_text = re.sub(r"> \[Category:.*?\]\n?", "", clean_text)
             
@@ -122,21 +136,49 @@ def build_index_if_empty(index, embedder, force: bool = False):
         metadatas.extend([{"text": c, "source": "Company Fact Sheet"} for c in chunks])
 
     print(f"  Total chunks: {len(all_chunks)}")
+    
+    print("Fitting BM25 Model for Sparse Vectors...")
+    bm25 = BM25Encoder()
+    bm25.fit(all_chunks)
+    bm25.dump(bm25_path)
+    
     embeddings = embedder.encode(all_chunks, show_progress_bar=True)
+    sparse_embeddings = bm25.encode_documents(all_chunks)
 
-    vectors = [
-        {"id": f"chunk_{i}_{int(time.time())}", "values": emb.tolist(), "metadata": meta}
-        for i, (emb, meta) in enumerate(zip(embeddings, metadatas))
-    ]
+    vectors = []
+    for i, (emb, meta, sparse) in enumerate(zip(embeddings, metadatas, sparse_embeddings)):
+        vectors.append({
+            "id": f"chunk_{i}_{int(time.time())}", 
+            "values": emb.tolist(), 
+            "sparse_values": sparse,
+            "metadata": meta
+        })
 
     for i in range(0, len(vectors), 100):
         index.upsert(vectors=vectors[i:i+100])
 
-    print("OK: RAG index ready.")
+    print("OK: Re-indexing and Hybrid Vectors ready.")
 
-def retrieve(question: str, index, embedder, top_k: int = 5) -> list:
-    q_embedding = embedder.encode([question]).tolist()[0]
-    results = index.query(vector=q_embedding, top_k=top_k, include_metadata=True)
+def retrieve(question: str, index, embedder, top_k: int = 10, alpha: float = 0.7) -> list:
+    content_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+    bm25_path = os.path.join(content_dir, "bm25_params.json")
+    
+    dense = embedder.encode([question]).tolist()[0]
+    
+    if os.path.exists(bm25_path):
+        bm25 = BM25Encoder().load(bm25_path)
+        sparse = bm25.encode_queries(question)
+        hdense, hsparse = hybrid_score_norm(dense, sparse, alpha=alpha)
+        
+        results = index.query(
+            vector=hdense, 
+            sparse_vector=hsparse, 
+            top_k=top_k, 
+            include_metadata=True
+        )
+    else:
+        results = index.query(vector=dense, top_k=top_k, include_metadata=True)
+        
     return [match["metadata"] for match in results["matches"]]
 
 # In-memory session-based chat history store

@@ -11,7 +11,7 @@ load_dotenv()
 # Setup
 pc = Pinecone(api_key=settings.PINECONE_API_KEY)
 index = pc.Index(settings.PINECONE_INDEX_NAME)
-embedder = SentenceTransformer('BAAI/bge-small-en')
+embedder = SentenceTransformer('BAAI/bge-large-en-v1.5')
 
 async def test_response():
     print("Testing Conversational Response Quality...")
