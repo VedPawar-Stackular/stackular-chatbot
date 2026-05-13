@@ -6,8 +6,5 @@ langchain-groq
 langchain-core
 langchain-text-splitters
 python-dotenv
-beautifulsoup4
-selenium
-webdriver-manager
 pydantic
 pinecone-text

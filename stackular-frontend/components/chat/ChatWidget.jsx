@@ -36,54 +36,94 @@ function TypingIndicator() {
   );
 }
 
+function renderInline(str, baseKey) {
+  if (!str) return null;
+  const regex = /(\*\*[^*]+\*\*)|(\[[^\]]*\]\([^)]*\))|(`[^`]+`)/g;
+  const parts = [];
+  let lastIndex = 0;
+  let match;
+  while ((match = regex.exec(str)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push(<span key={`${baseKey}-t${lastIndex}`}>{str.slice(lastIndex, match.index)}</span>);
+    }
+    const m = match[0];
+    const k = `${baseKey}-m${match.index}`;
+    if (m.startsWith('**')) {
+      parts.push(<strong key={k} style={{ fontWeight: 700 }}>{m.slice(2, -2)}</strong>);
+    } else if (m.startsWith('[')) {
+      const lm = m.match(/\[([^\]]*)\]\(([^)]*)\)/);
+      if (lm) {
+        const safe = /^https?:\/\//.test(lm[2]) || lm[2].startsWith('/');
+        parts.push(safe
+          ? <a key={k} href={lm[2]} target="_blank" rel="noopener noreferrer"
+              style={{ color: '#1d6ef5', textDecoration: 'underline', fontWeight: 600 }}
+              onMouseEnter={e => e.currentTarget.style.opacity = '0.8'}
+              onMouseLeave={e => e.currentTarget.style.opacity = '1'}>{lm[1]}</a>
+          : <span key={k}>{lm[1]}</span>
+        );
+      }
+    } else if (m.startsWith('`')) {
+      parts.push(
+        <code key={k} style={{ background: 'rgba(255,255,255,0.1)', borderRadius: 3, padding: '1px 4px', fontFamily: 'monospace', fontSize: 12 }}>
+          {m.slice(1, -1)}
+        </code>
+      );
+    }
+    lastIndex = regex.lastIndex;
+  }
+  if (lastIndex < str.length) {
+    parts.push(<span key={`${baseKey}-t${lastIndex}`}>{str.slice(lastIndex)}</span>);
+  }
+  return parts;
+}
+
+function renderMarkdown(str) {
+  if (!str) return null;
+  const lines = str.split('\n');
+  const result = [];
+  let i = 0;
+  let key = 0;
+  while (i < lines.length) {
+    const trimmed = lines[i].trim();
+    if (/^[-*] /.test(trimmed)) {
+      const items = [];
+      while (i < lines.length && /^[-*] /.test(lines[i].trim())) {
+        items.push(lines[i].trim().slice(2));
+        i++;
+      }
+      result.push(
+        <ul key={key++} style={{ margin: '2px 0 4px', paddingLeft: 18, listStyleType: 'disc' }}>
+          {items.map((item, j) => <li key={j} style={{ marginBottom: 2 }}>{renderInline(item, `ul${key}-${j}`)}</li>)}
+        </ul>
+      );
+      continue;
+    }
+    if (/^\d+\. /.test(trimmed)) {
+      const items = [];
+      while (i < lines.length && /^\d+\. /.test(lines[i].trim())) {
+        items.push(lines[i].trim().replace(/^\d+\. /, ''));
+        i++;
+      }
+      result.push(
+        <ol key={key++} style={{ margin: '2px 0 4px', paddingLeft: 18 }}>
+          {items.map((item, j) => <li key={j} style={{ marginBottom: 2 }}>{renderInline(item, `ol${key}-${j}`)}</li>)}
+        </ol>
+      );
+      continue;
+    }
+    if (!trimmed) {
+      result.push(<div key={key++} style={{ height: 6 }} />);
+      i++;
+      continue;
+    }
+    result.push(<p key={key++} style={{ margin: '0 0 3px' }}>{renderInline(lines[i], `p${key}`)}</p>);
+    i++;
+  }
+  return result;
+}
+
 function Message({ role, text }) {
   const isBot = role === 'bot';
-
-  // Robust markdown renderer for bold text and hyperlinks
-  const renderText = (str) => {
-    if (!str) return null;
-    
-    // Pattern to match [link text](url) and **bold text**
-    const regex = /(\[.*?\]\(.*?\))|(\*\*.*?\*\*)/g;
-    const parts = str.split(regex);
-    
-    return parts.map((part, i) => {
-      if (!part) return null;
-
-      // Handle Markdown Link: [text](url)
-      if (part.startsWith('[') && part.includes('](') && part.endsWith(')')) {
-        const linkMatch = part.match(/\[(.*?)\]\((.*?)\)/);
-        if (linkMatch) {
-          return (
-            <a 
-              key={i} 
-              href={linkMatch[2]} 
-              target="_blank" 
-              rel="noopener noreferrer"
-              style={{ 
-                color: '#1d6ef5', 
-                textDecoration: 'underline', 
-                fontWeight: 600,
-                transition: 'opacity 0.2s'
-              }}
-              onMouseEnter={e => e.currentTarget.style.opacity = '0.8'}
-              onMouseLeave={e => e.currentTarget.style.opacity = '1'}
-            >
-              {linkMatch[1]}
-            </a>
-          );
-        }
-      }
-
-      // Handle Markdown Bold: **text**
-      if (part.startsWith('**') && part.endsWith('**')) {
-        return <strong key={i} style={{ color: '#fff', fontWeight: 700 }}>{part.slice(2, -2)}</strong>;
-      }
-
-      // Return plain text
-      return <span key={i}>{part}</span>;
-    });
-  };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignSelf: isBot ? 'flex-start' : 'flex-end', maxWidth: '85%' }}>
@@ -95,10 +135,9 @@ function Message({ role, text }) {
         background: isBot ? 'rgba(255, 255, 255, 0.05)' : '#1d6ef5',
         color: '#ffffff',
         border: isBot ? '0.5px solid rgba(255, 255, 255, 0.1)' : 'none',
-        whiteSpace: 'pre-wrap',
         boxShadow: isBot ? 'none' : '0 4px 12px rgba(29, 110, 245, 0.2)',
       }}>
-        {renderText(text)}
+        {isBot ? renderMarkdown(text) : <span>{text}</span>}
       </div>
     </div>
   );
