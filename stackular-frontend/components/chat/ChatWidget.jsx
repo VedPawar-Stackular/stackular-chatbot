@@ -4,14 +4,22 @@ import { useState, useRef, useEffect } from 'react';
 
 const API_URL = process.env.NEXT_PUBLIC_CHATBOT_API_URL || 'http://localhost:8000';
 
-const SpeechRecognition = typeof window !== 'undefined' && (window.SpeechRecognition || window.webkitSpeechRecognition);
+const SpeechRecognition =
+  typeof window !== 'undefined' &&
+  (window.SpeechRecognition || window.webkitSpeechRecognition);
 
 const SUGGESTIONS = [
   'What services do you offer?',
   'Who founded Stackular?',
   'Open positions',
-  'Contact Information'
+  'Contact Information',
 ];
+
+const HIGH_INTENT = /\b(pricing|price|cost|quote|how much|demo|hire|engage|work with|partner|start a project|get started|project rate|rate card|retainer)\b/i;
+
+const STORAGE_KEY = 'stackular_chat_v1';
+
+// ---------- sub-components ----------
 
 function TypingIndicator() {
   return (
@@ -21,14 +29,15 @@ function TypingIndicator() {
         background: 'rgba(255, 255, 255, 0.04)',
         border: '0.5px solid rgba(255, 255, 255, 0.08)',
         borderRadius: '12px 12px 12px 3px',
-        display: 'flex', gap: '4px', alignItems: 'center'
+        display: 'flex', gap: '4px', alignItems: 'center',
       }}>
         {[0, 1, 2].map(i => (
           <span key={i} style={{
-            width: 6, height: 6, borderRadius: '50%', background: 'rgba(255, 255, 255, 0.4)',
+            width: 6, height: 6, borderRadius: '50%',
+            background: 'rgba(255, 255, 255, 0.4)',
             animation: 'bounce 1.2s infinite',
             animationDelay: `${i * 0.2}s`,
-            display: 'inline-block'
+            display: 'inline-block',
           }} />
         ))}
       </div>
@@ -124,7 +133,6 @@ function renderMarkdown(str) {
 
 function Message({ role, text }) {
   const isBot = role === 'bot';
-
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignSelf: isBot ? 'flex-start' : 'flex-end', maxWidth: '85%' }}>
       <div style={{
@@ -143,35 +151,114 @@ function Message({ role, text }) {
   );
 }
 
+function LeadCaptureCard({ onSubmit, onDismiss }) {
+  const [email, setEmail] = useState('');
+  const valid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  return (
+    <div style={{
+      alignSelf: 'flex-start', maxWidth: '92%',
+      background: 'rgba(29, 110, 245, 0.08)',
+      border: '1px solid rgba(29, 110, 245, 0.25)',
+      borderRadius: 12, padding: '12px 14px',
+    }}>
+      <p style={{ margin: '0 0 8px', fontSize: 12, color: 'rgba(255,255,255,0.85)', lineHeight: 1.5 }}>
+        Looks like you're exploring working with us. Want our team to reach out?
+      </p>
+      <div style={{ display: 'flex', gap: 6 }}>
+        <input
+          type="email"
+          value={email}
+          onChange={e => setEmail(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && valid && onSubmit(email)}
+          placeholder="your@email.com"
+          style={{
+            flex: 1, fontSize: 12, padding: '6px 10px',
+            background: 'rgba(255,255,255,0.06)',
+            border: '1px solid rgba(255,255,255,0.15)',
+            borderRadius: 7, color: '#fff', outline: 'none', fontFamily: 'inherit',
+          }}
+        />
+        <button
+          onClick={() => valid && onSubmit(email)}
+          disabled={!valid}
+          style={{
+            fontSize: 11, padding: '6px 12px',
+            background: valid ? '#1d6ef5' : 'rgba(255,255,255,0.06)',
+            border: 'none', borderRadius: 7, color: '#fff',
+            cursor: valid ? 'pointer' : 'not-allowed', fontFamily: 'inherit', fontWeight: 600,
+            transition: 'background 0.15s',
+          }}
+        >
+          Connect
+        </button>
+      </div>
+      <button
+        onClick={onDismiss}
+        style={{ marginTop: 8, background: 'none', border: 'none', color: 'rgba(255,255,255,0.35)', fontSize: 11, cursor: 'pointer', padding: 0, fontFamily: 'inherit' }}
+      >
+        No thanks
+      </button>
+    </div>
+  );
+}
+
+// ---------- main widget ----------
+
 export default function ChatWidget() {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState([
-    { role: 'bot', text: "Welcome to Stackular! How can we help you today? 👋" }
+    { role: 'bot', text: "Welcome to Stackular! How can we help you today? 👋" },
   ]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(true);
   const [sessionId, setSessionId] = useState('');
   const [isListening, setIsListening] = useState(false);
+  const [botExchangeCount, setBotExchangeCount] = useState(0);
+  const [showLeadCapture, setShowLeadCapture] = useState(false);
+  const [leadDismissed, setLeadDismissed] = useState(false);
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
   const recognitionRef = useRef(null);
 
+  // Restore from localStorage or generate new session
   useEffect(() => {
-    // Generate a simple unique session ID on mount
-    const newSessionId = Math.random().toString(36).substring(2, 11) + Date.now().toString(36);
-    setSessionId(newSessionId);
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        const { messages: m, sessionId: sid, botExchangeCount: bec } = JSON.parse(saved);
+        if (Array.isArray(m) && m.length > 1) {
+          setMessages(m);
+          setShowSuggestions(false);
+        }
+        if (sid) setSessionId(sid);
+        if (typeof bec === 'number') setBotExchangeCount(bec);
+      } else {
+        setSessionId(Math.random().toString(36).substring(2, 11) + Date.now().toString(36));
+      }
+    } catch {
+      setSessionId(Math.random().toString(36).substring(2, 11) + Date.now().toString(36));
+    }
   }, []);
+
+  // Persist to localStorage whenever messages or exchange count change
+  useEffect(() => {
+    if (!sessionId) return;
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ messages, sessionId, botExchangeCount }));
+    } catch {}
+  }, [messages, sessionId, botExchangeCount]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, isLoading]);
+  }, [messages, isLoading, showLeadCapture]);
 
   useEffect(() => {
     if (isOpen) setTimeout(() => inputRef.current?.focus(), 300);
   }, [isOpen]);
 
   const fetchAnswer = async (question) => {
+    const isHighIntent = HIGH_INTENT.test(question);
     setIsLoading(true);
     setMessages(prev => [...prev, { role: 'user', text: question }]);
 
@@ -192,31 +279,47 @@ export default function ChatWidget() {
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
-
         const chunk = decoder.decode(value, { stream: true });
         fullText += chunk;
-
         if (isFirstChunk && chunk.trim()) {
           setIsLoading(false);
           setMessages(prev => [...prev, { role: 'bot', text: fullText }]);
           isFirstChunk = false;
         } else if (!isFirstChunk) {
           setMessages(prev => {
-            const newMessages = [...prev];
-            newMessages[newMessages.length - 1] = { role: 'bot', text: fullText };
-            return newMessages;
+            const next = [...prev];
+            next[next.length - 1] = { role: 'bot', text: fullText };
+            return next;
           });
         }
       }
+      decoder.decode(); // flush
+
+      setBotExchangeCount(c => c + 1);
+      if (isHighIntent && !leadDismissed) setShowLeadCapture(true);
     } catch (err) {
       console.error('Streaming error:', err);
       setIsLoading(false);
       setMessages(prev => [...prev, {
         role: 'bot',
-        text: 'I\'m having trouble connecting right now. Please visit [stackular.co](https://www.stackular.co) directly.'
+        text: "I'm having trouble connecting right now. Please visit [stackular.com](https://www.stackular.com/contact-us) directly.",
       }]);
     }
     setIsLoading(false);
+  };
+
+  const handleLeadSubmit = (email) => {
+    setShowLeadCapture(false);
+    setLeadDismissed(true);
+    setMessages(prev => [...prev, {
+      role: 'bot',
+      text: `Thanks! We've noted your email (${email}) and someone from the Stackular team will be in touch shortly. In the meantime, feel free to keep asking questions.`,
+    }]);
+  };
+
+  const handleLeadDismiss = () => {
+    setShowLeadCapture(false);
+    setLeadDismissed(true);
   };
 
   const toggleListening = () => {
@@ -225,26 +328,21 @@ export default function ChatWidget() {
       setIsListening(false);
       return;
     }
-
     if (!SpeechRecognition) {
-      alert("Voice recognition is not supported in this browser.");
+      alert('Voice recognition is not supported in this browser.');
       return;
     }
-
     const recognition = new SpeechRecognition();
     recognition.continuous = false;
     recognition.interimResults = false;
     recognition.lang = 'en-US';
-
     recognition.onstart = () => setIsListening(true);
     recognition.onend = () => setIsListening(false);
-    recognition.onerror = () => setIsListening(false);
-    
-    recognition.onresult = (event) => {
-      const transcript = event.results[0][0].transcript;
-      setInput(transcript);
+    recognition.onerror = (e) => {
+      setIsListening(false);
+      if (e.error !== 'no-speech') console.warn('Voice error:', e.error);
     };
-
+    recognition.onresult = (event) => setInput(event.results[0][0].transcript);
     recognitionRef.current = recognition;
     recognition.start();
   };
@@ -254,6 +352,7 @@ export default function ChatWidget() {
     if (!text || isLoading) return;
     setInput('');
     setShowSuggestions(false);
+    setShowLeadCapture(false);
     fetchAnswer(text);
   };
 
@@ -261,6 +360,8 @@ export default function ChatWidget() {
     setShowSuggestions(false);
     fetchAnswer(text);
   };
+
+  const showHumanCTA = botExchangeCount >= 3 && !leadDismissed;
 
   return (
     <div style={{ fontFamily: "'Inter', 'Segoe UI', sans-serif" }}>
@@ -283,7 +384,8 @@ export default function ChatWidget() {
           width: 56, height: 56, borderRadius: '50%',
           background: '#1d6ef5', border: 'none', cursor: 'pointer',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          zIndex: 9999, transition: 'all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
+          zIndex: 9999,
+          transition: 'all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
           boxShadow: '0 8px 24px rgba(29, 110, 245, 0.35)',
         }}
         onMouseEnter={e => {
@@ -311,8 +413,9 @@ export default function ChatWidget() {
       {isOpen && (
         <div style={{
           position: 'fixed', bottom: 104, right: 32,
-          width: 360, height: 520,
-          background: 'rgba(6, 11, 20, 0.96)', 
+          width: 'min(360px, calc(100vw - 32px))',
+          height: 520,
+          background: 'rgba(6, 11, 20, 0.96)',
           backdropFilter: 'blur(20px)',
           borderRadius: 20,
           border: '1px solid rgba(255, 255, 255, 0.08)',
@@ -324,7 +427,7 @@ export default function ChatWidget() {
 
           {/* Header */}
           <div style={{
-            background: 'rgba(255, 255, 255, 0.02)', 
+            background: 'rgba(255, 255, 255, 0.02)',
             padding: '18px 20px',
             display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0,
             borderBottom: '1px solid rgba(255, 255, 255, 0.06)',
@@ -356,6 +459,9 @@ export default function ChatWidget() {
           }}>
             {messages.map((msg, i) => <Message key={i} role={msg.role} text={msg.text} />)}
             {isLoading && <TypingIndicator />}
+            {showLeadCapture && !isLoading && (
+              <LeadCaptureCard onSubmit={handleLeadSubmit} onDismiss={handleLeadDismiss} />
+            )}
             <div ref={messagesEndRef} />
           </div>
 
@@ -367,21 +473,21 @@ export default function ChatWidget() {
                 {SUGGESTIONS.map(s => (
                   <button key={s} onClick={() => handleChip(s)} style={{
                     fontSize: 11, padding: '7px 14px',
-                    border: '1px solid rgba(255, 255, 255, 0.15)', 
+                    border: '1px solid rgba(255, 255, 255, 0.15)',
                     borderRadius: 8,
-                    background: 'transparent', 
+                    background: 'transparent',
                     color: 'rgba(255, 255, 255, 0.7)',
                     cursor: 'pointer', fontFamily: 'inherit',
                     transition: 'all 0.2s ease',
                     whiteSpace: 'nowrap',
                   }}
-                    onMouseEnter={e => { 
-                      e.currentTarget.style.background = 'rgba(29, 110, 245, 0.1)'; 
+                    onMouseEnter={e => {
+                      e.currentTarget.style.background = 'rgba(29, 110, 245, 0.1)';
                       e.currentTarget.style.borderColor = '#1d6ef5';
                       e.currentTarget.style.color = '#fff';
                     }}
-                    onMouseLeave={e => { 
-                      e.currentTarget.style.background = 'transparent'; 
+                    onMouseLeave={e => {
+                      e.currentTarget.style.background = 'transparent';
                       e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.15)';
                       e.currentTarget.style.color = 'rgba(255, 255, 255, 0.7)';
                     }}
@@ -393,11 +499,36 @@ export default function ChatWidget() {
             </div>
           )}
 
+          {/* "Talk to the team" CTA — appears after 3 exchanges */}
+          {showHumanCTA && (
+            <div style={{
+              background: 'rgba(29, 110, 245, 0.07)',
+              borderTop: '1px solid rgba(29, 110, 245, 0.18)',
+              padding: '9px 16px',
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              flexShrink: 0,
+            }}>
+              <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.55)' }}>Ready to get started?</span>
+              <a
+                href="https://www.stackular.com/contact-us"
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ fontSize: 11, color: '#1d6ef5', fontWeight: 600, textDecoration: 'none' }}
+                onMouseEnter={e => e.currentTarget.style.textDecoration = 'underline'}
+                onMouseLeave={e => e.currentTarget.style.textDecoration = 'none'}
+              >
+                Talk to the team →
+              </a>
+            </div>
+          )}
+
           {/* Input row */}
           <div style={{
             background: 'rgba(0,0,0,0.2)',
             display: 'flex', alignItems: 'center', gap: 12,
-            padding: '14px 16px', borderTop: '1px solid rgba(255, 255, 255, 0.06)', flexShrink: 0,
+            padding: '14px 16px',
+            borderTop: showHumanCTA ? 'none' : '1px solid rgba(255, 255, 255, 0.06)',
+            flexShrink: 0,
           }}>
             <button
               onClick={toggleListening}
@@ -421,7 +552,8 @@ export default function ChatWidget() {
               value={input}
               onChange={e => setInput(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && handleSend()}
-              placeholder={isListening ? "Listening..." : "Type your message..."}
+              placeholder={isListening ? 'Listening...' : 'Type your message...'}
+              maxLength={1000}
               style={{
                 flex: 1, border: 'none', background: 'transparent',
                 fontSize: 13, fontFamily: 'inherit', outline: 'none',
@@ -434,7 +566,8 @@ export default function ChatWidget() {
               style={{
                 width: 36, height: 36, borderRadius: 10,
                 background: isLoading || !input.trim() ? 'rgba(255, 255, 255, 0.05)' : '#1d6ef5',
-                border: 'none', cursor: isLoading || !input.trim() ? 'not-allowed' : 'pointer',
+                border: 'none',
+                cursor: isLoading || !input.trim() ? 'not-allowed' : 'pointer',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 transition: 'all 0.2s ease', flexShrink: 0,
                 boxShadow: isLoading || !input.trim() ? 'none' : '0 4px 12px rgba(29, 110, 245, 0.3)',
@@ -447,7 +580,7 @@ export default function ChatWidget() {
           </div>
 
           <div style={{ background: 'rgba(0,0,0,0.2)', textAlign: 'center', padding: '0 0 10px', flexShrink: 0 }}>
-             <p style={{ fontSize: 9, color: 'rgba(255,255,255,0.25)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            <p style={{ fontSize: 9, color: 'rgba(255,255,255,0.25)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
               Engineered by Stackular
             </p>
           </div>
