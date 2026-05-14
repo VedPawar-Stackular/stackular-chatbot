@@ -992,5 +992,108 @@ Current open positions are listed at [stackular.com/joinus](https://www.stackula
 ### Get in Touch
 
 - **Contact Form:** https://www.stackular.com/contact-us
+Reach out and bring your imagination to life.
+Email ID: info@stackular.com
+Phone Number: +1 (888) 278-8667
+
 - **Privacy Policy:** https://www.stackular.com/privacy-policy
+Effective Date: 11/01/2022   
+Last Updated: 09/02/2025  
+   
+****1\. Introduction****   
+Stackular ("we," "our," "us") is committed to protecting your privacy and ensuring transparency in how we handle your personal data. This Privacy Policy explains how we collect, use, disclose, and protect your information when you visit www.stackular.com, request consultations, use our services, or interact with us.   
+   
+This Policy complies with:   
+\- General Data Protection Regulation (GDPR – EU/EEA)   
+\- California Consumer Privacy Act (CCPA/CPRA – US)   
+\- Digital Personal Data Protection Act, 2023 (DPDP Act – India)   
+\- Other applicable data protection laws.   
+   
+****2\. Scope****   
+This Policy applies to:   
+\- Visitors to our website and digital platforms.   
+\- Clients, prospects, and business partners.   
+\- Job applicants and recruitment referrals.   
+   
+****3\. Information We Collect****   
+3.1 Personal Data   
+\- Name, email, phone number, company, job title.   
+\- Job application materials (CVs, portfolios).   
+\- Communications (emails, inquiries, messages).   
+   
+3.2 Technical & Usage Data   
+\- IP address, browser type, device details.   
+\- Website usage, pages visited, referral sources.   
+\- Cookies, analytics, and similar technologies.   
+   
+****4\. Legal Basis for Processing****   
+\- GDPR (EU): Consent, contractual necessity, legal obligations, legitimate interests.   
+\- CCPA (US): Collected for business purposes; we do not sell personal data.   
+\- DPDP Act (India): Based on consent or certain legitimate uses permitted under the Act (e.g., employment, compliance with law, emergencies).   
+   
+****5\. How We Use Your Data****   
+\- To provide and improve services.   
+\- To respond to inquiries and consultations.   
+\- For recruitment and HR purposes.   
+\- To send updates, offers, or marketing (with consent).   
+\- To ensure security, fraud prevention, and compliance.   
+   
+****6\. Your Privacy Rights****   
+6.1 GDPR (EU/EEA)   
+\- Access, rectification, erasure, restriction, portability, objection, withdraw consent, lodge complaint with DPA.   
+   
+6.2 CCPA/CPRA (California, US)   
+\- Right to know, access, delete, correct, opt-out of sale/sharing, and non-discrimination.   
+   
+6.3 DPDP Act (India)   
+As a Data Principal, you have the right to:   
+\- Access: Know what personal data we process.   
+\- Correction & Erasure: Correct or request deletion of your data.   
+\- Consent Management: Give, withdraw, or manage your consent at any time.   
+\- Grievance Redressal: File a complaint with our Data Protection Officer (DPO).   
+\- Nominate a Representative: Appoint someone to exercise your rights in case of incapacity.   
+   
+****7\. International Data Transfers****   
+We may transfer your personal data across jurisdictions (e.g., EU, US, India). Safeguards include:   
+\- GDPR: Standard Contractual Clauses (SCCs).   
+\- CCPA: Compliance with US privacy requirements.   
+\- DPDP Act: Transfers aligned with Indian government rules and bilateral agreements.   
+   
+****8\. Data Retention****   
+\- Client records – retained for project duration + 5 years.   
+\- Recruitment data – up to 12 months unless longer retention is consented.   
+\- Analytics – anonymized after use.   
+   
+****9\. Cookies & Tracking****   
+We use cookies for:   
+\- Website functionality.   
+\- Performance and analytics.   
+\- Marketing personalization.   
+Manage cookies via your browser or our cookie consent tool.   
+   
+10. ****Data Security****   
+We adopt technical and organizational measures to secure data:   
+\- Encryption, secure servers, and access controls.   
+\- Periodic audits and employee training.   
+\- Compliance with reasonable security practices (as per GDPR, CCPA, DPDP).   
+   
+****11\. Children’s Privacy****   
+\- GDPR (EU): No data from children under 16 without parental consent.   
+\- CCPA (US): No data from children under 13, opt-in for ages 13–16.   
+\- DPDP (India): No data from children under 18 without verifiable parental consent.   
+   
+****12\. Grievance Redressal & DPO (DPDP Act – India)****   
+To raise concerns, contact:   
+info@stackular.com   
+If unsatisfied, you may escalate complaints to the Data Protection Board of India.   
+   
+****13\. Changes to This Policy****   
+We may update this Privacy Policy periodically. Significant changes will be notified on our website.   
+   
+****14\. Contact Us****   
+For privacy-related inquiries or to exercise your GDPR/CCPA/DPDP rights:   
+info@stackular.com   
+www.stackular.com   
+Data Controller: Stackular
+
 - **Careers:** https://www.stackular.com/joinus
