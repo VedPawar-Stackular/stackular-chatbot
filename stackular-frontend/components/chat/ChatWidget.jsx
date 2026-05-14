@@ -219,6 +219,25 @@ export default function ChatWidget() {
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
   const recognitionRef = useRef(null);
+  const chipsRef = useRef(null);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
+
+  const checkChipsScroll = () => {
+    const el = chipsRef.current;
+    if (!el) return;
+    setCanScrollLeft(el.scrollLeft > 8);
+    setCanScrollRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 8);
+  };
+
+  useEffect(() => {
+    if (!isOpen || !showSuggestions) return;
+    const el = chipsRef.current;
+    if (!el) return;
+    requestAnimationFrame(checkChipsScroll);
+    el.addEventListener('scroll', checkChipsScroll);
+    return () => el.removeEventListener('scroll', checkChipsScroll);
+  }, [isOpen, showSuggestions]);
 
   // Generate a fresh session ID on every mount — chat resets on page refresh
   useEffect(() => {
@@ -444,19 +463,35 @@ export default function ChatWidget() {
 
           {/* Suggestion chips */}
           {showSuggestions && (
-            <div style={{ display: 'flex', overflowX: 'auto', gap: 8, padding: '0 20px 16px', flexShrink: 0, scrollbarWidth: 'none' }}>
-              <style>{`.hide-scrollbar::-webkit-scrollbar { display: none; }`}</style>
-              <div className="hide-scrollbar" style={{ display: 'flex', gap: 8 }}>
+            <div style={{ position: 'relative', flexShrink: 0 }}>
+              <style>{`.chip-row::-webkit-scrollbar { display: none; }`}</style>
+              {canScrollLeft && (
+                <button onClick={() => chipsRef.current.scrollBy({ left: -130, behavior: 'smooth' })} style={{
+                  position: 'absolute', left: 4, top: '40%', transform: 'translateY(-50%)', zIndex: 2,
+                  width: 24, height: 24, borderRadius: '50%',
+                  background: 'rgba(20,20,32,0.95)', border: '1px solid rgba(255,255,255,0.18)',
+                  color: '#fff', fontSize: 14, cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0,
+                }}>‹</button>
+              )}
+              {canScrollRight && (
+                <button onClick={() => chipsRef.current.scrollBy({ left: 130, behavior: 'smooth' })} style={{
+                  position: 'absolute', right: 4, top: '40%', transform: 'translateY(-50%)', zIndex: 2,
+                  width: 24, height: 24, borderRadius: '50%',
+                  background: 'rgba(20,20,32,0.95)', border: '1px solid rgba(255,255,255,0.18)',
+                  color: '#fff', fontSize: 14, cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0,
+                }}>›</button>
+              )}
+              <div ref={chipsRef} className="chip-row" style={{ display: 'flex', overflowX: 'auto', gap: 8, padding: '0 20px 16px', scrollbarWidth: 'none' }}>
                 {SUGGESTIONS.map(s => (
                   <button key={s} onClick={() => handleChip(s)} style={{
                     fontSize: 11, padding: '7px 14px',
                     border: '1px solid rgba(255, 255, 255, 0.15)',
-                    borderRadius: 8,
-                    background: 'transparent',
+                    borderRadius: 8, background: 'transparent',
                     color: 'rgba(255, 255, 255, 0.7)',
                     cursor: 'pointer', fontFamily: 'inherit',
-                    transition: 'all 0.2s ease',
-                    whiteSpace: 'nowrap',
+                    transition: 'all 0.2s ease', whiteSpace: 'nowrap', flexShrink: 0,
                   }}
                     onMouseEnter={e => {
                       e.currentTarget.style.background = 'rgba(29, 110, 245, 0.1)';
