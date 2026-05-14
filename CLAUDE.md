@@ -2,10 +2,10 @@
 
 ## Project Overview
 
-An AI-powered RAG chatbot for the Stackular website. Visitors can ask questions about Stackular's services, company info, and portfolio. The bot retrieves relevant context from a local knowledge base and generates streaming answers via an LLM.
+An AI-powered RAG chatbot for the Stackular website. Visitors can ask questions about Stackular's services, company info, and portfolio. The bot retrieves relevant context from a local knowledge base using hybrid vector search and generates streaming answers via an LLM.
 
 **Current branch:** `text_rag` (active development)  
-**Main branch:** `main`
+**Main branch:** `main` (not yet merged)
 
 ---
 
@@ -14,22 +14,35 @@ An AI-powered RAG chatbot for the Stackular website. Visitors can ask questions 
 ### High-Level Flow
 
 ```
-User query → Next.js frontend → FastAPI backend → Pinecone (hybrid vector search)
-                                                         ↓
-                                               Retrieved context chunks
-                                                         ↓
-                                             Groq (Llama 3.3 70B) LLM → Streaming response
+User query → Next.js frontend (ChatWidget.jsx)
+                  │  POST /chat { question, session_id }
+                  ▼
+           FastAPI backend (port 8000)
+                  │
+                  ├─ Hybrid retrieval from Pinecone
+                  │    ├─ Dense: BAAI/bge-small-en (384-dim, local)
+                  │    └─ Sparse: BM25Encoder (pinecone-text)
+                  │
+                  ├─ Context + last 5 turns of history → prompt
+                  │
+                  └─ Groq API → llama-3.3-70b-versatile → StreamingResponse
 ```
 
 ### Data Ingestion Flow
 
 ```
-knowledge_base.md (local markdown) → Chunked (600 chars / 100 overlap)
-                                    → Dense embeddings: BAAI/bge-small-en (384 dims)
-                                    → Sparse embeddings: BM25Encoder (pinecone-text)
-                                    → Hybrid upsert to Pinecone index "bge-small-en"
-                                    → BM25 params saved to bm25_params.json (root)
+knowledge_base.md (manual markdown, source of truth)
+    │
+    ├─ RecursiveCharacterTextSplitter (600 chars / 100 overlap)
+    │
+    ├─ Dense embeddings: BAAI/bge-small-en (384-dim, sentence-transformers)
+    ├─ Sparse embeddings: BM25Encoder fitted on same corpus
+    │
+    └─ Hybrid upsert → Pinecone index "bge-small-en" (dotproduct metric, AWS us-east-1)
+         └─ bm25_params.json saved to repo root (auto-generated on each reindex)
 ```
+
+To update content: edit `knowledge_base.md`, then `POST /admin/reindex` with `X-Admin-Token` header.
 
 ---
 
@@ -38,31 +51,31 @@ knowledge_base.md (local markdown) → Chunked (600 chars / 100 overlap)
 ```
 Stackular_Demo/
 ├── CLAUDE.md                    ← this file
-├── README.md                    ← setup instructions
+├── README.md                    ← setup and workflow documentation
 ├── package.json                 ← root scripts: `npm run dev:all` starts both services
-├── knowledge_base.md            ← source-of-truth content for RAG (manual markdown)
-├── bm25_params.json             ← fitted BM25 sparse encoder params (auto-generated)
-├── manual_reindex.py            ← standalone reindex script (uses bge-large-en-v1.5)
+├── knowledge_base.md            ← fully curated source-of-truth for RAG (all website pages)
+├── bm25_params.json             ← fitted BM25 sparse encoder params (auto-generated on reindex)
+├── manual_reindex.py            ← ⚠ DO NOT USE — uses bge-large-en-v1.5 (1024-dim), breaks index
 ├── verify_rag.py                ← test retrieval quality
 ├── verify_response.py           ← test end-to-end response quality
 ├── interaction.md               ← example Q&A showing desired output format
 ├── project_review.txt           ← senior dev review with roadmap recommendations
 │
 ├── stackular-api/               ← FastAPI backend (Python 3.14, venv at .venv/)
-│   ├── main.py                  ← FastAPI app entry point (lazy-loads models on first request)
-│   ├── reindex.py               ← in-package reindex helper
-│   ├── requirements.txt
-│   ├── .env                     ← GROQ_API_KEY, PINECONE_API_KEY, PINECONE_INDEX_NAME
+│   ├── main.py                  ← FastAPI app, CORS middleware, lazy startup
+│   ├── reindex.py               ← in-package reindex helper (not the root manual_reindex.py)
+│   ├── requirements.txt         ← no selenium/beautifulsoup4/webdriver-manager
+│   ├── .env                     ← GROQ_API_KEY, PINECONE_API_KEY, ADMIN_TOKEN, ALLOWED_ORIGINS
 │   └── app/
-│       ├── core/config.py       ← Settings class (reads .env)
-│       ├── models/schemas.py    ← ChatRequest (question, session_id), ChatResponse
+│       ├── core/config.py       ← Settings: PINECONE_API_KEY, GROQ_API_KEY, ADMIN_TOKEN, ALLOWED_ORIGINS
+│       ├── models/schemas.py    ← ChatRequest with field_validator (strips whitespace, ≤1000 chars)
 │       ├── api/
-│       │   ├── deps.py          ← get_embedder() + get_index() (cached globals, lazy init)
+│       │   ├── deps.py          ← get_embedder() + get_index() (lazy singletons, auto-creates index)
 │       │   ├── main.py          ← APIRouter aggregator
 │       │   └── routes/
 │       │       ├── chat.py      ← POST /chat → StreamingResponse (text/event-stream)
-│       │       ├── health.py    ← GET /health → vector count
-│       │       └── admin.py     ← POST /admin/reindex → background reindex task
+│       │       ├── health.py    ← GET /health → {status, vectors_in_index}
+│       │       └── admin.py     ← POST /admin/reindex → requires X-Admin-Token header
 │       └── services/
 │           └── rag_service.py   ← core RAG logic (see below)
 │
@@ -72,7 +85,7 @@ Stackular_Demo/
     │   ├── layout.js            ← RootLayout: loads Inter font, mounts ChatWidget globally
     │   └── page.js              ← Home page: Navbar, HeroSection, WorldMapSection, ClientLogosSection
     └── components/
-        ├── chat/ChatWidget.jsx  ← floating chat bubble + panel (self-contained, all inline styles)
+        ├── chat/ChatWidget.jsx  ← floating chat widget (all features, all inline styles)
         ├── home/HeroSection.jsx
         ├── home/WorldMapSection.jsx
         ├── home/ClientLogosSection.jsx
@@ -85,31 +98,64 @@ Stackular_Demo/
 
 ### `stackular-api/app/services/rag_service.py`
 
-The core of the system:
+Core RAG logic — no dead code, no Selenium imports.
 
-- **`STACKULAR_PAGES`** — list of 14 Stackular URLs (legacy, was used for Selenium scraping; now superseded by `knowledge_base.md`)
-- **`CURATED_FACTS`** — 6 hardcoded facts always appended to the index (founders, HQ, key URLs)
-- **`build_index_if_empty(index, embedder, force=False)`** — reads `knowledge_base.md`, splits into chunks, fits BM25, encodes dense+sparse, upserts to Pinecone. Skips if index already populated (unless `force=True`).
-- **`retrieve(question, index, embedder, top_k=10, alpha=0.7)`** — hybrid search: alpha=0.7 weights dense 70%, sparse 30%
-- **`CHAT_HISTORY`** — in-memory dict keyed by session_id; keeps last 10 turns, injects last 3 into prompt
-- **`rag_stream_answer(question, index, embedder, session_id)`** — async generator; retrieves context, formats prompt, streams from Groq LLM, appends to history after completion
-- **System prompt** — strict persona, 8 response rules (depth, tone, pronoun resolution, citations, off-topic handling, formatting, links)
+- **`CURATED_FACTS`** — 6 hardcoded strings always added to the index at reindex time (founders, HQ, key URLs). Acts as a safety net for most-asked facts.
+- **`build_index_if_empty(index, embedder, force=False)`** — reads `knowledge_base.md`, splits into 600-char chunks, strips `> [Source:]` and `> [Category:]` metadata tags, fits BM25 on all chunks, encodes dense + sparse vectors, upserts to Pinecone in batches of 100.
+- **`hybrid_score_norm(dense, sparse, alpha)`** — scales dense by `alpha`, sparse by `1 - alpha`. alpha=0.7 means 70% dense / 30% BM25.
+- **`retrieve(question, index, embedder, top_k=10, alpha=0.7)`** — encodes query, loads `bm25_params.json`, runs hybrid query. Falls back to dense-only if hybrid fails (e.g., wrong Pinecone metric).
+- **`CHAT_HISTORY`** — in-memory dict keyed by session_id. Stores up to 10 turns. Cleared on server restart.
+- **`get_history(session_id, limit=5)`** — returns last 5 turns formatted as `Visitor: ... / Assistant: ...`
+- **`_build_prompt(question, context, history_context)`** — builds the full LLM prompt via string concatenation (not f-strings with triple quotes). Contains: persona, contextual info (history + retrieved chunks), 8 response guidelines, a few-shot example showing bullet-list format, then the visitor's question.
+- **`rag_stream_answer(question, index, embedder, session_id)`** — async generator. Retrieves → builds prompt → streams via `ChatGroq(temperature=0.3).astream()` → yields each chunk → appends full answer to `CHAT_HISTORY` after stream completes. No artificial delay.
 
 ### `stackular-api/app/api/deps.py`
 
-- Lazy-loaded singleton globals: `_embedder` (SentenceTransformer) and `_index` (Pinecone)
-- **Pinecone index name:** `"bge-small-en"` (hardcoded in `get_index()`, separate from `PINECONE_INDEX_NAME` setting)
-- **Embedding model:** `BAAI/bge-small-en` (384-dim) — NOTE: `manual_reindex.py` at root uses `bge-large-en-v1.5` (1024-dim), which is inconsistent
+- `INDEX_NAME = "bge-small-en"`, `EMBEDDING_DIM = 384` — hardcoded constants.
+- `get_embedder()` — lazy singleton. Loads `BAAI/bge-small-en` via sentence-transformers on first call.
+- `get_index()` — lazy singleton. Connects to Pinecone, **auto-creates the index** with `dotproduct` metric and `ServerlessSpec(cloud="aws", region="us-east-1")` if it doesn't exist.
+
+### `stackular-api/app/api/routes/admin.py`
+
+- `_verify_admin(x_admin_token)` — dependency that checks the `X-Admin-Token` header against `settings.ADMIN_TOKEN`. Returns 503 if `ADMIN_TOKEN` not set in env, 401 if token mismatch.
+- `POST /admin/reindex` — protected by `_verify_admin`. Runs `build_index_if_empty(force=True)` as a background task.
+
+### `stackular-api/app/models/schemas.py`
+
+- `ChatRequest(question: str, session_id: str | None)` — `field_validator` strips whitespace, rejects empty string, enforces ≤1000 chars. No `ChatResponse` model (endpoint returns `StreamingResponse`).
+
+### `stackular-api/app/core/config.py`
+
+```python
+class Settings:
+    PINECONE_API_KEY: str       # from env
+    GROQ_API_KEY: str           # from env
+    ADMIN_TOKEN: str            # from env — required for POST /admin/reindex
+    ALLOWED_ORIGINS: list[str]  # comma-separated env var; default "*"; set to domain in production
+```
+
+### `stackular-api/main.py`
+
+- CORS driven by `settings.ALLOWED_ORIGINS` (not hardcoded `["*"]`).
+- `allow_methods=["GET", "POST", "OPTIONS"]`, `allow_headers=["Content-Type", "X-Admin-Token"]`.
+- Lazy startup — no model pre-loading. Models initialize on the first `/chat` request.
 
 ### `stackular-frontend/components/chat/ChatWidget.jsx`
 
-- Floating blue bubble (bottom-right, fixed position)
-- Session ID generated on mount (`Math.random` + `Date.now`)
-- Reads stream chunks incrementally, updating the last bot message in place
-- Suggestion chips: "What services do you offer?", "Who founded Stackular?", "Open positions", "Contact Information" — hidden after first use
-- Voice input via Web Speech API (`SpeechRecognition`)
-- Custom markdown renderer for `**bold**` and `[link](url)` — no external markdown library
-- No external UI library; all inline styles with dark theme (`#060b14` background, `#1d6ef5` blue)
+All inline styles, no external UI library. Dark theme (`#060b14` bg, `#1d6ef5` blue).
+
+- **Floating bubble** — bottom-right fixed position
+- **Session ID** — generated on mount (`Math.random` + `Date.now`). Chat clears on every page refresh (no localStorage).
+- **Markdown rendering** — full block-aware `renderMarkdown()` + `renderInline()`:
+  - Block: `- ` / `* ` prefixed lines → `<ul><li>`, `\d+. ` → `<ol><li>`, blank lines → spacer `<div>`, else `<p>`
+  - Inline: `**bold**` → `<strong>`, `` `code` `` → `<code>`, `[text](url)` → `<a>` (XSS-safe: only `http://`, `https://`, or `/` paths allowed)
+- **Lead capture** — `LeadCaptureCard` component appears after a message matches `HIGH_INTENT` regex (`pricing|price|cost|quote|how much|demo|hire|engage|work with|partner|start a project|get started|project rate|rate card|retainer`). Shows email input. Once dismissed or submitted, doesn't reappear in session.
+- **CTA bar** — "Talk to the team →" bar (links to `/contact-us`) appears above input after `botExchangeCount >= 3`. Hidden once lead card is dismissed.
+- **Suggestion chips** — 4 starter questions in a scrollable row with left/right arrows. Hidden after first use.
+- **Voice input** — Web Speech API `SpeechRecognition`. Mic button in input bar.
+- **Mobile responsive** — `width: 'min(360px, calc(100vw - 32px))'`
+- **Input max length** — `maxLength={1000}`
+- **Stream handling** — `ReadableStream` reader. Each chunk appended to the last bot message in state. `TextDecoder` final flush called after loop.
 
 ---
 
@@ -117,36 +163,45 @@ The core of the system:
 
 | Component | Value |
 |---|---|
-| LLM | `llama-3.3-70b-versatile` via Groq API |
-| Embedding (runtime) | `BAAI/bge-small-en` (384-dim, local via sentence-transformers) |
-| Embedding (manual_reindex) | `BAAI/bge-large-en-v1.5` (1024-dim) — **inconsistency with runtime** |
-| Vector DB | Pinecone (serverless, AWS us-east-1, dotproduct metric) |
-| Sparse vectors | BM25 via `pinecone-text` |
+| LLM | `llama-3.3-70b-versatile` via Groq API, temperature 0.3 |
+| Embedding | `BAAI/bge-small-en` (384-dim, local via sentence-transformers) |
+| Sparse vectors | BM25Encoder (pinecone-text), params in `bm25_params.json` |
+| Vector DB | Pinecone serverless — index `bge-small-en`, **dotproduct metric** (required for hybrid) |
 | Backend | FastAPI + Uvicorn (port 8000) |
 | Frontend | Next.js 14 App Router (port 3000) |
-| Python version | 3.14 (causes Pydantic V1 warning from LangChain — non-blocking) |
+| Python | 3.14 (Pydantic V1 warning from LangChain — non-blocking; use 3.11/3.12 in prod) |
 | Dev runner | `concurrently` via root `npm run dev:all` |
 
 ---
 
 ## API Endpoints
 
-| Method | Path | Description |
-|---|---|---|
-| GET | `/` | Health ping |
-| GET | `/health` | Returns `{status, vectors_in_index}` |
-| POST | `/chat` | Streaming chat (`ChatRequest` → `text/event-stream`) |
-| POST | `/admin/reindex` | Triggers background re-index (force=True by default) |
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| GET | `/` | None | Health ping |
+| GET | `/health` | None | Returns `{status, vectors_in_index}` |
+| POST | `/chat` | None | Streaming chat (`ChatRequest` → `text/event-stream`) |
+| POST | `/admin/reindex` | `X-Admin-Token` header | Triggers background reindex from `knowledge_base.md` |
+
+---
+
+## Environment Variables (`stackular-api/.env`)
+
+```
+GROQ_API_KEY=...
+PINECONE_API_KEY=...
+ADMIN_TOKEN=dev-reindex-token          # any string; use a strong secret in production
+ALLOWED_ORIGINS=*                      # set to https://www.stackular.com before production deploy
+```
 
 ---
 
 ## Knowledge Base
 
-- **File:** `knowledge_base.md` — manually curated markdown; source of truth for all RAG content
-- Each section starts with `# Section Title`, includes `> [Source: URL]` and `> [Category: ...]` metadata tags
-- The ingestion pipeline strips these tags before chunking and stores the URL as Pinecone metadata
-- **Sections covered:** Overview, About, Cloud Infrastructure, (and more services/portfolio entries in the full file)
-- To update content: edit `knowledge_base.md`, then call `POST /admin/reindex` or run `manual_reindex.py`
+- **File:** `knowledge_base.md` — complete content from all Stackular website pages (fully updated 2026-05-14)
+- Sections use `## Heading` with `> Source: <url>` inline. The ingestion pipeline strips source/category tags before chunking and stores the URL as Pinecone metadata.
+- **Open Positions:** Job listings change. When roles change: edit the Open Positions section in `knowledge_base.md`, then `POST /admin/reindex`.
+- **To update any content:** edit `knowledge_base.md` → `POST /admin/reindex` → `GET /health` to confirm vector count > 0.
 
 ---
 
@@ -172,38 +227,28 @@ npm run dev:all
 # Frontend: http://localhost:3000
 ```
 
-**Required `.env` in `stackular-api/`:**
-```
-GROQ_API_KEY=...
-PINECONE_API_KEY=...
-PINECONE_INDEX_NAME=bge-large-en   # used by manual_reindex.py; runtime uses hardcoded "bge-small-en"
-```
-
 ---
 
 ## Known Issues / Gotchas
 
-1. **Embedding model inconsistency:** `deps.py` uses `bge-small-en` (384-dim), but `manual_reindex.py` at the repo root uses `bge-large-en-v1.5` (1024-dim). Running the root reindex script against the runtime index will break dimension compatibility.
-2. **Pinecone index name hardcoded:** `get_index()` in `deps.py` hardcodes `"bge-small-en"` — ignores `PINECONE_INDEX_NAME` env var.
-3. **CORS:** Currently `allow_origins=["*"]` — fine for demo, restrict for production.
-4. **Pydantic V1 warning:** LangChain uses Pydantic V1 internally; Python 3.14 triggers a compatibility warning. Non-blocking. Recommend Python 3.11/3.12 for production.
-5. **Session memory is in-memory:** `CHAT_HISTORY` dict is lost on server restart. No persistence.
-6. **Selenium scraper still in code** (`rag_service.py`) but is not called — knowledge base is loaded from `knowledge_base.md`. The scraper functions and `STACKULAR_PAGES` list are dead code.
+1. **dotproduct metric is mandatory** — Pinecone hybrid search only works with `dotproduct`. The old index was `cosine` and caused crashes. `deps.py` now auto-creates with `dotproduct`. If you ever need to recreate the index, delete it from the Pinecone console and restart the backend.
+2. **`manual_reindex.py` at repo root uses `bge-large-en-v1.5` (1024-dim)** — running it against the runtime `bge-small-en` index (384-dim) will break dimension compatibility. Use `POST /admin/reindex` instead.
+3. **Session history is in-memory** — `CHAT_HISTORY` dict is lost on server restart. Frontend chat also resets on page refresh (intentional — localStorage was removed).
+4. **Pydantic V1 warning** — LangChain uses Pydantic V1 internally; Python 3.14 triggers a warning. Non-blocking. Use Python 3.11/3.12 in production.
+5. **Emails from lead capture are not sent** — `LeadCaptureCard` shows a confirmation but no backend endpoint or email service (Resend, SendGrid, etc.) is wired up.
+6. **No rate limiting** — `/chat` has no protection against spam. Add before production.
 
 ---
 
-## Roadmap (from `project_review.txt`)
+## Roadmap (pending)
 
-- **Lead capture:** Ask for email when user shows high purchase intent
-- **Intent handoff:** "Chat with a Human" / Calendly link button
-- **Persistent sessions:** `localStorage` on frontend + backend session store
-- **Webhook-triggered reindex:** Replace manual reindex with a push-based webhook when website changes
-- **Rich components / action buttons:** UI beyond plain text (e.g., "Book a Call" CTA buttons)
-- **Hybrid LLM routing:** Use Claude/GPT-4o for complex queries, Groq for simple ones
-- **Few-shot examples in prompt:** Bake in "Stackular Voice" via examples
+- **Email delivery for lead capture** — wire up Resend or SendGrid to actually send/store captured emails
+- **Rate limiting** on `/chat` endpoint
+- **Merge `text_rag` → `main`**
+- **Production deploy** — set `ALLOWED_ORIGINS=https://www.stackular.com` and strong `ADMIN_TOKEN`
 
 ---
 
 ## Desired Response Format
 
-From `interaction.md`: the bot should break lists into vertical bullet points, use short paragraphs (1-3 sentences each), and place hyperlinks on their own line at the end of the response. Avoid large blocks of continuous text.
+From `interaction.md`: bullet points for lists, short paragraphs (1–3 sentences), hyperlinks on their own line at the end of the response. The few-shot example in `_build_prompt()` enforces this at LLM-prompt level.
