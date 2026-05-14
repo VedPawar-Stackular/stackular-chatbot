@@ -5,6 +5,12 @@
 Stackular is a premier software consulting and development firm offering top notch services.
 We focus on:
 1. Product Development
+- Experience Design: 
+- MVP implementation
+- Operations support
+- Product Management
+- Product Strategy
+
 2. Data Intelligence
 3. Enterprise Systems
 4. Digital Experience
@@ -181,34 +187,63 @@ Discover our successful projects for over 120+ Clients with 200+ Projects.
 
 ## AP Automation for Global Hospitality Organization
 > [Source: https://www.stackular.com/portfolio/ap-automation-for-global-hospitality-organization]
-Stackular implemented an automation solution integrating ServiceNow, OCR, and Oracle Financials that reduced manual invoice processing efforts by 90% for a global enterprise's Accounts Payable team.
-Tags: Agentic AI, OCR, Oracle, ServiceNow, Business Process Automation.
+- The global organization needed to eliminate the manual burden of processing vendor invoices within its Accounts Payable (AP) department. Stackular designed and implemented an automation solution leveraging Azure Document Intelligence and OpenAI Services to streamline invoice capture, processing, and submission between ServiceNow and Oracle Financials.
+- Problem: The AP team was overwhelmed by manual work. Hundreds of vendor invoices arrived daily by email, requiring employees to upload them into ServiceNow, monitor a queue, and then re-enter all invoice data by hand into Oracle Financials for payment processing. The repetitive process created bottlenecks, delayed payments, and wasted staff capacity on low-value tasks that could be automated.
+- Approach: Stackular developed an integrated automation workflow that continuously monitored the ServiceNow queue, automatically retrieved new invoices, and processed them using Azure Document Intelligence to extract and validate invoice data. OpenAI Services were applied to interpret unstructured information, handle exceptions, and improve accuracy. The cleaned and structured data was then submitted directly to Oracle Financials for payment — eliminating nearly all manual steps while maintaining audit integrity.
+- Technology & Tools: Microsoft Azure, OpenAI, Azure Document Intelligence, servicenow, Oracle
+- Industries: Commercial, Hospitality
+- Result: The automation reduced manual effort by more than 90%, cutting thousands of hours of repetitive work from the AP team’s daily routine. Invoices now flow automatically from ServiceNow to Oracle with high accuracy and minimal human intervention. The organization achieved faster payment cycles, improved data quality, and freed its finance staff to focus on value-added analysis rather than administrative tasks.
+- Success Metrics: +90% Manual work reduced, +$1M Cost Savings, 5x Team productivity increased, +100% Payment delays decreased
 
 ## Case Management System for Healthcare Services Company
 > [Source: https://www.stackular.com/portfolio/case-management-system-for-healthcare-services-company]
-Stackular designed and implemented a Case Management System on Microsoft Dynamics 365 Customer Service to replace manual, Excel-based processes for a national healthcare services company specializing in organ procurement.
-Tags: Healthcare, Case Management, Dynamics 365, Business Process Automation, HIPAA.
+A national healthcare services company specializing in organ procurement needed a scalable platform to manage and process thousands of daily cases. Stackular designed and implemented a Case Management System on Microsoft Dynamics 365 Customer Service to replace manual, Excel-based processes.
+- Tags: Healthcare, Case Management, Dynamics 365, Business Process Automation, HIPAA.
+- Problem: When the organization was smaller, tracking cases in Excel worked. But as volume grew, spreadsheets quickly became a bottleneck. They lacked consistency, automation, and scalability, making it difficult to process cases efficiently or ensure accuracy across teams. With thousands of cases now being handled each day — each tied directly to life-saving procedures — the existing approach was no longer sustainable.
+- Approach: Stackular implemented a Case Management System built on Dynamics 365 Customer Service. The platform standardized case tracking, automated workflows that were previously manual, and created a centralized system of record. We worked closely with the customer to map existing processes, optimize them for scale, and embed automation directly into daily operations.
+- Industries: CommercialHealthcare and Life Sciences
+- Result: The company moved from fragile, spreadsheet-based case tracking to a scalable platform capable of processing thousands of cases per day. Manual tasks were automated, accuracy improved, and staff gained real-time visibility into active cases. With Dynamics 365 as the backbone, the organization is now equipped to manage its growing workload efficiently and reliably — ensuring critical cases are handled at the pace their mission demands.
+- Success Metrics: +105% Cases Increased, +150% Customer Satisfaction
 
 ## UX Redesign for International Rideshare Company
 > [Source: https://www.stackular.com/portfolio/ux-redesign-for-international-rideshare-company]
-Stackular redesigned the primary interface of an international ride share company to unify rides and new services, enabling cross-sell opportunities while preserving a simple, user-friendly experience.
-Tags: UX Design, Mobile App, Usability Testing, Enterprise Scale, Customer Experience.
+An international ride share company was expanding beyond rides, adding new services and integrating acquisitions into its platform. The company needed a redesigned interface that could present multiple offerings in a single, seamless experience while maintaining the simplicity that made the brand successful. Stackular partnered to design and test the new service flow, enabling the company to upsell and cross-sell its growing portfolio.
+- Tags: UX Design, Mobile App, Usability Testing, Enterprise Scale, Customer Experience.
+- Problem: The existing interface was designed exclusively for ride requests, leaving no clear path to introduce additional offerings or promote new services. As the company grew through acquisitions and internal expansion, it lacked a unified user experience to tie everything together. Without redesigning the core flow, customers would struggle to discover or adopt services beyond rides.
+- Approach: Stackular worked closely with the company’s product team to redesign the primary request flow, creating a flexible interface that supported rides and additional services in one experience. Using Figma, we developed and iterated on prototypes, validating usability through hands-on user testing. Once proven, the final design system was delivered to the company’s internal engineering team for implementation.
+- Industries: Commercial, Hospitality
+- Result: The redesigned interface created a unified entry point for rides and additional services, opening new opportunities for upsell and cross-sell. User testing confirmed that customers could easily navigate the expanded offerings without confusion or added friction. By handing off validated designs, Stackular enabled the company’s engineering team to accelerate rollout, strengthening their ability to grow revenue through new services while preserving the simplicity of the brand’s core experience.
+- Success Metrics: +20% New Services Offered, +$100M Revenue Increase, 3x Performance, +100% Customer Satisfaction
 
 ## Extranet Modernization for Global Hospitality Organization
 > [Source: https://www.stackular.com/portfolio/extranet-modernization-for-global-hospitality-organization]
-Stackular rebuilt a supplier management and group purchasing extranet on a modern cloud-native stack, enhancing performance, usability, and functionality while introducing AI-driven capabilities.
-Tags: Extranet, Web Modernization, Mobile First, Agentic AI, WCAG Compliance.
+A global hospitality company serving senior living facilities needed to modernize its customer-facing extranet, which provides supplier management and group purchasing services. The legacy platform, was costly to maintain, lacked modern features, and provided a poor user experience. Stackular rebuilt the extranet on a modern cloud-native stack, enhancing performance, usability, and functionality while introducing AI-driven capabilities.
+- Tags: Extranet, Web Modernization, Mobile First, Agentic AI, WCAG Compliance.
+- Problem: The company’s extranet had become a burden to both customers and the business. Licensing fees for into hundreds of thousands of dollars annually, yet the platform remained outdated, slow, and difficult to use. It lacked mobile-friendly interfaces, modern content management, and AI features. Customers in the senior living sector relied on the extranet for critical services such as supplier data submission, education and training, news and alerts, and menu and recipe management — but the experience fell short of expectations.
+- Approach: Stackular executed a module-by-module migration to a new platform built on React and .NET, hosted in Azure Cloud. Using our own proprietary AI, we rapidly modernized each application within the extranet — including supplier data portals, education and learning tools, and menu/recipe management systems — to ensure continuity for users while delivering valuable improvements. We also embedded new AI capabilities: agentic AI to automate routine tasks such as menu creation and management, and AI translation services to instantly localize recipes into French and Spanish.
+- Industries: Commercial, Hospitality
+- Result: The new extranet is faster, mobile-friendly, and significantly less expensive to operate. Customers in senior living facilities now benefit from a modern interface with improved usability, while the company gains flexibility and cost savings by moving away from expensive legacy licensing. AI features streamline workflows, automate manual tasks, and provide multilingual support for a diverse user base. The modernized extranet not only delivers more value to customers but also positions the company to expand its digital services without the constraints of outdated technology.
+- Success Metrics: +600% Page Load Time Decreased, +$2M End User Usage, 3x Performance, +150% Customer Satisfaction Increased
 
 ## Modern Data Platform for Healthcare Services Company
 > [Source: https://www.stackular.com/portfolio/modern-data-platform-for-healthcare-services-company]
-Stackular built a scalable data platform to unify clinical, financial, and operational insights—enabling faster decision-making, predictive analytics, and improved patient outcomes.
-Tags: HIPAA, Medallion Architecture, Real-Time Analytics, Cloud Architecture, Data Intelligence.
+Stackular built a real-time data warehouse on Microsoft Fabric with Power BI reporting, fed from Dynamics case management. Delivered sub-second reporting, full historical tracking, and time-aware analytics for same-day cases. The platform now supports advanced analysis and AI readiness in a mission where timing and accuracy save lives.
+- Tags: HIPAA, Medallion Architecture, Real-Time Analytics, Cloud Architecture, Data Intelligence.
+- Problem: In organ procurement, every decision is tied to life and death. The company’s Dynamics case management system could not keep pace with the urgency of their mission. Reporting directly from Dynamics was slow, historical data wasn’t tracked, and there was no ability to see how case information changed over time. Without a proper data platform, they couldn’t support time-sensitive decision-making, trend analysis, or prepare their data for AI.
+- Approach: Stackular built a real-time data warehouse using a medallion architecture on Microsoft Fabric, fed continuously from the Dynamics case management system. Power BI served as the reporting layer, enabling instant insights with built-in time intelligence. The architecture was designed not only to accelerate reporting, but also to capture historical changes, power advanced analytics, and lay the foundation for AI-driven insights.
+- Industries: Commercial, Healthcare and Life Sciences
+- Result: The company went from waiting hours for reports to accessing insights in seconds, with the added ability to track historical changes across cases. Same-day intelligence is now available to align reporting with the pace of organ procurement, giving leadership real-time visibility into life-critical operations. Beyond speed, the platform positions the organization for AI and advanced analytics, ensuring they can continue to evolve their mission with data-driven confidence.
+- Success Metrics: +300% Report load time decrease, +$1M Rows of Data, 20x Performance, +120% Customer Satisfaction
 
 ## Procure to Pay App Modernization for Global Hospitality Organization
 > [Source: https://www.stackular.com/portfolio/procure-to-pay-app-modernization-for-global-hospitality-organization]
-Stackular rebuilt a Procure-to-Pay platform on a modern, cloud-native architecture to improve performance, usability, and scalability while adding AI and automation capabilities.
-Tags: Enterprise Apps, Agentic AI, B2B Solutions, Automation, P2P.
-
+A global hospitality company offering group purchasing services needed to modernize its Procure-to-Pay (P2P) platform, originally built in 2005. The legacy application was slow, difficult to maintain, and out of step with customer expectations. Stackular rebuilt the platform on a modern, cloud-native architecture to improve performance, usability, and scalability while adding AI and automation capabilities.
+- Tags: Enterprise Apps, Agentic AI, B2B Solutions, Automation, P2P.
+- Problem: The company’s P2P platform, built on classic ASP with business logic embedded in a monolithic Oracle database, had become a critical liability. It was slow, burdened with technical debt, and lacked mobile support — making it increasingly difficult for customers and suppliers to transact efficiently. The outdated architecture also limited integration options, preventing seamless connections with customer and supplier ERP systems.
+- Approach: Stackular modernized the P2P system by rebuilding it with React and .NET microservices deployed on AWS. We re-architected business logic into modular services, significantly reducing technical debt while improving maintainability and scalability. To add value, we introduced AI features, including automated purchase order creation and OCR capabilities for invoice processing from scanned documents. We also built robust integration capabilities to connect the platform directly with customer and supplier ERP systems, enabling automation across the procurement process.
+- Industries: Commercial, Hospitality
+- Result: The new P2P platform is faster, mobile-friendly, and scalable — delivering a vastly improved experience for both customers and suppliers. Automation features streamlined procurement, reducing manual work and errors in purchase order and invoice creation. Integrations with ERP systems allowed for end-to-end automation of key procurement workflows. By eliminating technical debt and adopting a cloud-native architecture, the company reduced costs, improved reliability, and positioned the platform for future growth and innovation.
+- Success Metrics: +300% Page Load Time Reduction, +$5M Revenue Increased, 54x New Customers Onboarded, +133% Customer Satisfaction Increased
 ---
 
 # Engagement Models & How We Work
