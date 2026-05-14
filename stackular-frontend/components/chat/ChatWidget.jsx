@@ -17,7 +17,6 @@ const SUGGESTIONS = [
 
 const HIGH_INTENT = /\b(pricing|price|cost|quote|how much|demo|hire|engage|work with|partner|start a project|get started|project rate|rate card|retainer)\b/i;
 
-const STORAGE_KEY = 'stackular_chat_v1';
 
 // ---------- sub-components ----------
 
@@ -221,33 +220,11 @@ export default function ChatWidget() {
   const inputRef = useRef(null);
   const recognitionRef = useRef(null);
 
-  // Restore from localStorage or generate new session
+  // Generate a fresh session ID on every mount — chat resets on page refresh
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        const { messages: m, sessionId: sid, botExchangeCount: bec } = JSON.parse(saved);
-        if (Array.isArray(m) && m.length > 1) {
-          setMessages(m);
-          setShowSuggestions(false);
-        }
-        if (sid) setSessionId(sid);
-        if (typeof bec === 'number') setBotExchangeCount(bec);
-      } else {
-        setSessionId(Math.random().toString(36).substring(2, 11) + Date.now().toString(36));
-      }
-    } catch {
-      setSessionId(Math.random().toString(36).substring(2, 11) + Date.now().toString(36));
-    }
+    setSessionId(Math.random().toString(36).substring(2, 11) + Date.now().toString(36));
+    try { localStorage.removeItem('stackular_chat_v1'); } catch {}
   }, []);
-
-  // Persist to localStorage whenever messages or exchange count change
-  useEffect(() => {
-    if (!sessionId) return;
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ messages, sessionId, botExchangeCount }));
-    } catch {}
-  }, [messages, sessionId, botExchangeCount]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
