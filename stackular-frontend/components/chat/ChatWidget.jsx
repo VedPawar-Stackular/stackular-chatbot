@@ -390,8 +390,8 @@ export default function ChatWidget() {
       {isOpen && (
         <div style={{
           position: 'fixed', bottom: 104, right: 32,
-          width: 'min(360px, calc(100vw - 32px))',
-          height: 520,
+          width: 'min(450px, calc(100vw - 32px))',
+          height: 750,
           background: 'rgba(6, 11, 20, 0.96)',
           backdropFilter: 'blur(20px)',
           borderRadius: 20,
