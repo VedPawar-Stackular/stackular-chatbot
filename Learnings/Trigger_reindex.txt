@@ -1,0 +1,65 @@
+how to trigger a reindex and where:
+curl -X POST http://localhost:8000/admin/reindex command is not working as it is giving an error:
+PS C:\WINDOWS\system32> curl -X POST http://localhost:8000/admin/reindex
+Invoke-WebRequest : A parameter cannot be found that matches parameter name 'X'.
+At line:1 char:6
++ curl -X POST http://localhost:8000/admin/reindex
++      ~~
+    + CategoryInfo          : InvalidArgument: (:) [Invoke-WebRequest], ParameterBindingException
+    + FullyQualifiedErrorId : NamedParameterNotFound,Microsoft.PowerShell.Commands.InvokeWebRequestCommand
+
+
+
+
+In PowerShell, curl is an alias for Invoke-WebRequest — not the Unix curl. Two ways to fix it:
+
+Option 1 — Use curl.exe explicitly (Windows ships with real curl):
+curl.exe -X POST http://localhost:8000/admin/reindex -H "X-Admin-Token: dev-reindex-token"
+
+
+Option 2 — Use PowerShell's native Invoke-RestMethod:
+Invoke-RestMethod -Method POST -Uri "http://localhost:8000/admin/reindex" -Headers @{ "X-Admin-Token" = "dev-reindex-token" }
+Note the X-Admin-Token header is required — without it you'll get a 401. The dev token value (dev-reindex-token) comes from ADMIN_TOKEN in your stackular-api/.env.
+After triggering, verify it worked:
+Invoke-RestMethod -Uri "http://localhost:8000/health"
+vectors_in_index should be greater than 0. The reindex runs in the background so give it 30–60 seconds before checking.
+
+What reindex does (build_index_if_empty with force=True)
+Step 1 — Wipe Pinecone (line 43–46)
+
+
+index.delete(delete_all=True)
+All existing vectors are deleted from Pinecone unconditionally when force=True. The index is now empty.
+
+Step 2 — Read knowledge_base.md fresh (line 62–76)
+The file is read from disk at that exact moment. Whatever is in the file right now becomes the source of truth — the old content is gone.
+
+Step 3 — Chunk it (line 50, 73)
+RecursiveCharacterTextSplitter splits the text into chunks of 600 characters with 100-character overlap. The number of chunks changes if the content changes.
+
+Step 4 — Refit BM25 from scratch (line 87–89)
+
+
+bm25 = BM25Encoder()
+bm25.fit(all_chunks)   # learns vocabulary and term frequencies from the new chunks
+bm25.dump(bm25_path)   # overwrites bm25_params.json
+BM25 is not loaded from the old params — it's refitted entirely on the new chunk set. bm25_params.json is overwritten.
+
+Step 5 — Generate all embeddings (line 91–92)
+
+
+embeddings = embedder.encode(all_chunks)          # dense vectors (bge-small-en)
+sparse_embeddings = bm25.encode_documents(all_chunks)  # sparse vectors (BM25)
+Every chunk gets both a dense and a sparse vector computed fresh.
+
+Step 6 — Upsert everything to Pinecone (line 105–106)
+All new vectors are uploaded in batches of 100.
+
+Your two questions answered directly
+If you change knowledge_base.md and reindex:
+Yes — new chunks are generated from the updated text, BM25 is refitted on the new vocabulary, and new vectors (both dense and sparse) are computed and uploaded. The chatbot will now retrieve from the updated content. This is the correct workflow.
+
+If you do NOT change knowledge_base.md and reindex:
+The same file is read again, the same chunks are produced, and functionally identical vectors are regenerated and re-uploaded. The result is the same index content — it's a no-op from a knowledge perspective, just wasteful on compute/time. The only difference is the vector IDs get new timestamps (chunk_{i}_{timestamp}) so they're technically new records, but the content is identical.
+
+Practical implication: You only need to reindex after you actually edit knowledge_base.md. There's no benefit to reindexing without a content change.
