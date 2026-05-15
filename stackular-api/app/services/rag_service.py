@@ -108,7 +108,7 @@ def build_index_if_empty(index, embedder, force: bool = False):
     print("OK: Re-indexing and Hybrid Vectors ready.")
 
 
-def retrieve(question: str, index, embedder, top_k: int = 10, alpha: float = 0.7) -> list:
+def retrieve(question: str, index, embedder, top_k: int = 10, alpha: float = 0.7, min_score: float = 0.1) -> list:
     content_dir = os.path.dirname(
         os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     )
@@ -130,7 +130,8 @@ def retrieve(question: str, index, embedder, top_k: int = 10, alpha: float = 0.7
     else:
         results = index.query(vector=dense, top_k=top_k, include_metadata=True)
 
-    return [match["metadata"] for match in results["matches"]]
+    matches = [m for m in results["matches"] if m.get("score", 0) >= min_score]
+    return [match["metadata"] for match in matches]
 
 
 CHAT_HISTORY = {}
@@ -165,17 +166,14 @@ def _build_prompt(question: str, context: str, history_context: str) -> str:
         "For anything else, here's how to reach the team: "
         "[Contact Stackular](https://www.stackular.com/contact-us)"
     )
+    # Constraints are front-loaded before context so the LLM internalises rules
+    # before reading any retrieved content (reduces rule drift on longer answers).
     return (
         'You are an AI Assistant for Stackular, a premier software consulting and development firm. '
         'Speak on behalf of Stackular using "we" and "our" — never "I" or "the company".\n'
         "Your goal is to provide comprehensive, professional, and helpful responses to visitors.\n\n"
         "---\n"
-        "## CONTEXTUAL INFORMATION\n"
-        f"{history_context}\n\n"
-        "### Context from Stackular's website:\n"
-        f"{context}\n\n"
-        "---\n"
-        "## RESPONSE GUIDELINES\n\n"
+        "## RESPONSE RULES (read and apply before using any context below)\n\n"
         "1. **Depth & Quality:** Provide detailed answers (1-3 paragraphs if needed) that fully address "
         "the visitor's query using the provided context. Avoid overly brief responses unless it is a simple greeting.\n"
         "2. **Professional Tone:** Maintain a helpful, high-end consulting firm voice. Be clear, authoritative, and welcoming.\n"
@@ -186,7 +184,7 @@ def _build_prompt(question: str, context: str, history_context: str) -> str:
         "   - Example: For more details, visit our [Services Page](https://www.stackular.com/services/).\n"
         "5. **Off-topic:** If the question is entirely unrelated to Stackular or professional services, respond exactly:\n"
         f'"{off_topic}"\n'
-        "6. **Formatting constraints for readability (CRITICAL):**\n"
+        "6. **Formatting (CRITICAL — never deviate):**\n"
         "   - Never write massive, continuous blocks of text. Break your responses into distinct, short paragraphs "
         "(1-3 sentences maximum per paragraph).\n"
         '   - Whenever you list more than two items, you MUST format them as a vertical bulleted list using "- " prefix, '
@@ -196,10 +194,17 @@ def _build_prompt(question: str, context: str, history_context: str) -> str:
         "  (b) Providing a specific URL citation based on the context.\n"
         "8. Place hyperlinks on a new line at the very end of your response.\n\n"
         "---\n"
+        "## CONTEXTUAL INFORMATION\n"
+        f"{history_context}\n\n"
+        "### Context from Stackular's website:\n"
+        f"{context}\n\n"
+        "---\n"
         "## EXAMPLE RESPONSE FORMAT (mirror this structure exactly)\n\n"
         f"{few_shot}\n\n"
         "---\n\n"
         f"Visitor's question: {question}\n\n"
+        "Before responding, verify: does this answer the visitor's specific question? "
+        "If the provided context is insufficient, say so directly rather than guessing.\n\n"
         "Answer:"
     )
 

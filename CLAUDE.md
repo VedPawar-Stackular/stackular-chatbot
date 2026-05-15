@@ -1,5 +1,45 @@
 # Stackular Demo — Project Context for Claude
 
+## Working with Claude Code
+
+Use these practices when prompting Claude Code on this project. They apply the 32 tricks from https://www.youtube.com/watch?v=jqoFP9QapXI to this codebase.
+
+### Front-load constraints (Trick 11)
+Start every prompt with what NOT to do before describing what you want:
+> "Don't add new pip packages. Don't touch the Pinecone index metric. Keep all styles inline. Now add X…"
+
+### Effort levels (Trick 4)
+Tag your prompt so Claude scales its depth appropriately:
+- `[low]` — single-file typo/rename, straightforward change
+- `[medium]` — feature touching 2–3 files, needs light planning
+- `[high]` — cross-stack change, new service, or anything touching rag_service.py + frontend
+
+### Plan before code (Trick 9)
+For any `[medium]` or `[high]` task, ask for a plan first:
+> "Before writing any code, give me a written plan for how you'll implement X."
+
+### GSD framework (Trick 12)
+For large features, split across three separate sessions:
+1. **Gather** — explore only, no edits (spawn Explore agents)
+2. **Specify** — write the plan (Plan mode)
+3. **Do** — implement with a clean context window
+
+### Self-critique step (Trick 15)
+After Claude generates code, follow up with:
+> "What are the edge cases and failure modes in what you just wrote?"
+
+### Checkpoint commits (Trick 26)
+Before handing off between major tasks (e.g., backend done, now starting frontend), commit the backend work so there's a clean rollback point.
+
+### Git worktrees for parallel work (Trick 21)
+When backend and frontend changes are independent, use `git worktree add` to run two Claude Code sessions simultaneously without branch conflicts.
+
+### Context management (Tricks 1, 6)
+- Run `/compact` after finishing a logical chunk (e.g., after RAG service changes, before starting frontend)
+- Start a new session for unrelated tasks — don't carry RAG context into a Navbar change
+
+---
+
 ## Project Overview
 
 An AI-powered RAG chatbot for the Stackular website. Visitors can ask questions about Stackular's services, company info, and portfolio. The bot retrieves relevant context from a local knowledge base using hybrid vector search and generates streaming answers via an LLM.
