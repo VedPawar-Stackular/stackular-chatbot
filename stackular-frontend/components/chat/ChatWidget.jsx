@@ -15,14 +15,49 @@ const SUGGESTIONS = [
   'Contact Information',
 ];
 
+// High-intent is now an analytics signal only (the lead-capture card was removed).
 const HIGH_INTENT = /\b(pricing|price|cost|quote|how much|demo|hire|engage|work with|partner|start a project|get started|project rate|rate card|retainer)\b/i;
+
+
+// ---------- analytics (fire-and-forget; never blocks or breaks the chat) ----------
+
+function postJSON(path, payload) {
+  try {
+    fetch(`${API_URL}${path}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      keepalive: true,
+    }).catch(() => {});
+  } catch {
+    /* analytics must never surface an error to the user */
+  }
+}
+
+
+// ---------- helpers ----------
+
+function sourceLabel(url) {
+  try {
+    const u = new URL(url);
+    const seg = u.pathname.split('/').filter(Boolean).pop();
+    const raw = seg ? seg.replace(/[-_]/g, ' ') : u.hostname.replace(/^www\./, '');
+    return raw.charAt(0).toUpperCase() + raw.slice(1);
+  } catch {
+    return 'Source';
+  }
+}
+
+function isSafeUrl(url) {
+  return /^https?:\/\//.test(url) || (typeof url === 'string' && url.startsWith('/'));
+}
 
 
 // ---------- sub-components ----------
 
 function TypingIndicator() {
   return (
-    <div style={{ display: 'flex', alignSelf: 'flex-start', maxWidth: '85%' }}>
+    <div style={{ display: 'flex', alignSelf: 'flex-start', maxWidth: '85%' }} aria-label="Assistant is typing">
       <div style={{
         padding: '10px 14px',
         background: 'rgba(255, 255, 255, 0.04)',
@@ -61,7 +96,7 @@ function renderInline(str, baseKey) {
     } else if (m.startsWith('[')) {
       const lm = m.match(/\[([^\]]*)\]\(([^)]*)\)/);
       if (lm) {
-        const safe = /^https?:\/\//.test(lm[2]) || lm[2].startsWith('/');
+        const safe = isSafeUrl(lm[2]);
         parts.push(safe
           ? <a key={k} href={lm[2]} target="_blank" rel="noopener noreferrer"
               style={{ color: '#1d6ef5', textDecoration: 'underline', fontWeight: 600 }}
@@ -130,8 +165,72 @@ function renderMarkdown(str) {
   return result;
 }
 
-function Message({ role, text }) {
-  const isBot = role === 'bot';
+function SourcesFooter({ sources }) {
+  // Only the single most-relevant source is shown — a wall of citation chips
+  // read as noise, and the reranked top result is the one worth surfacing.
+  const safe = sources.filter(isSafeUrl).slice(0, 1);
+  if (safe.length === 0) return null;
+  return (
+    <div style={{ marginTop: 8, display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
+      <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+        Sources
+      </span>
+      {safe.map((url, i) => (
+        <a key={i} href={url} target="_blank" rel="noopener noreferrer"
+          style={{
+            fontSize: 10, padding: '2px 8px', borderRadius: 6,
+            background: 'rgba(29,110,245,0.1)', border: '1px solid rgba(29,110,245,0.25)',
+            color: '#7eb0ff', textDecoration: 'none', whiteSpace: 'nowrap',
+          }}>
+          {sourceLabel(url)}
+        </a>
+      ))}
+    </div>
+  );
+}
+
+function MessageActions({ msg, onCopy, onFeedback, copied }) {
+  const iconBtn = (extra = {}) => ({
+    background: 'none', border: 'none', cursor: 'pointer', padding: '2px 4px',
+    color: 'rgba(255,255,255,0.4)', fontSize: 12, lineHeight: 1,
+    display: 'flex', alignItems: 'center', gap: 3, fontFamily: 'inherit',
+    transition: 'color 0.15s', ...extra,
+  });
+  return (
+    <div style={{ display: 'flex', gap: 8, marginTop: 6, alignItems: 'center' }}>
+      <button
+        onClick={() => onCopy(msg)}
+        aria-label="Copy message"
+        title="Copy"
+        style={iconBtn()}
+        onMouseEnter={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.8)')}
+        onMouseLeave={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.4)')}
+      >
+        {copied ? '✓ Copied' : '⧉ Copy'}
+      </button>
+      <button
+        onClick={() => onFeedback(msg, 'up')}
+        aria-label="Helpful"
+        title="Helpful"
+        style={iconBtn({ color: msg.feedback === 'up' ? '#4ade80' : 'rgba(255,255,255,0.4)' })}
+      >
+        👍
+      </button>
+      <button
+        onClick={() => onFeedback(msg, 'down')}
+        aria-label="Not helpful"
+        title="Not helpful"
+        style={iconBtn({ color: msg.feedback === 'down' ? '#ef4444' : 'rgba(255,255,255,0.4)' })}
+      >
+        👎
+      </button>
+    </div>
+  );
+}
+
+function Message({ msg, onCopy, onFeedback, onRetry, copied }) {
+  const isBot = msg.role === 'bot';
+  const showActions = isBot && msg.id && !msg.error;
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignSelf: isBot ? 'flex-start' : 'flex-end', maxWidth: '85%' }}>
       <div style={{
@@ -144,59 +243,26 @@ function Message({ role, text }) {
         border: isBot ? '0.5px solid rgba(255, 255, 255, 0.1)' : 'none',
         boxShadow: isBot ? 'none' : '0 4px 12px rgba(29, 110, 245, 0.2)',
       }}>
-        {isBot ? renderMarkdown(text) : <span>{text}</span>}
+        {isBot ? renderMarkdown(msg.text) : <span>{msg.text}</span>}
+        {isBot && msg.sources?.length > 0 && !msg.error && <SourcesFooter sources={msg.sources} />}
       </div>
-    </div>
-  );
-}
 
-function LeadCaptureCard({ onSubmit, onDismiss }) {
-  const [email, setEmail] = useState('');
-  const valid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-  return (
-    <div style={{
-      alignSelf: 'flex-start', maxWidth: '92%',
-      background: 'rgba(29, 110, 245, 0.08)',
-      border: '1px solid rgba(29, 110, 245, 0.25)',
-      borderRadius: 12, padding: '12px 14px',
-    }}>
-      <p style={{ margin: '0 0 8px', fontSize: 12, color: 'rgba(255,255,255,0.85)', lineHeight: 1.5 }}>
-        Looks like you're exploring working with us. Want our team to reach out?
-      </p>
-      <div style={{ display: 'flex', gap: 6 }}>
-        <input
-          type="email"
-          value={email}
-          onChange={e => setEmail(e.target.value)}
-          onKeyDown={e => e.key === 'Enter' && valid && onSubmit(email)}
-          placeholder="your@email.com"
-          style={{
-            flex: 1, fontSize: 12, padding: '6px 10px',
-            background: 'rgba(255,255,255,0.06)',
-            border: '1px solid rgba(255,255,255,0.15)',
-            borderRadius: 7, color: '#fff', outline: 'none', fontFamily: 'inherit',
-          }}
-        />
+      {showActions && (
+        <MessageActions msg={msg} onCopy={onCopy} onFeedback={onFeedback} copied={copied} />
+      )}
+
+      {isBot && msg.error && (
         <button
-          onClick={() => valid && onSubmit(email)}
-          disabled={!valid}
+          onClick={onRetry}
           style={{
-            fontSize: 11, padding: '6px 12px',
-            background: valid ? '#1d6ef5' : 'rgba(255,255,255,0.06)',
-            border: 'none', borderRadius: 7, color: '#fff',
-            cursor: valid ? 'pointer' : 'not-allowed', fontFamily: 'inherit', fontWeight: 600,
-            transition: 'background 0.15s',
+            alignSelf: 'flex-start', marginTop: 6, fontSize: 11, fontWeight: 600,
+            padding: '5px 12px', borderRadius: 7, cursor: 'pointer', fontFamily: 'inherit',
+            background: 'rgba(29,110,245,0.12)', border: '1px solid rgba(29,110,245,0.35)', color: '#7eb0ff',
           }}
         >
-          Connect
+          ↻ Retry
         </button>
-      </div>
-      <button
-        onClick={onDismiss}
-        style={{ marginTop: 8, background: 'none', border: 'none', color: 'rgba(255,255,255,0.35)', fontSize: 11, cursor: 'pointer', padding: 0, fontFamily: 'inherit' }}
-      >
-        No thanks
-      </button>
+      )}
     </div>
   );
 }
@@ -209,19 +275,27 @@ export default function ChatWidget() {
     { role: 'bot', text: "Welcome to Stackular! How can we help you today? 👋" },
   ]);
   const [input, setInput] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);   // awaiting first token (typing indicator)
+  const [isStreaming, setIsStreaming] = useState(false); // request in flight (enables Stop)
   const [showSuggestions, setShowSuggestions] = useState(true);
   const [sessionId, setSessionId] = useState('');
   const [isListening, setIsListening] = useState(false);
   const [botExchangeCount, setBotExchangeCount] = useState(0);
-  const [showLeadCapture, setShowLeadCapture] = useState(false);
-  const [leadDismissed, setLeadDismissed] = useState(false);
+  const [copiedId, setCopiedId] = useState(null);
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
   const recognitionRef = useRef(null);
   const chipsRef = useRef(null);
+  const abortRef = useRef(null);
+  const lastQuestionRef = useRef('');
+  const chatStartedRef = useRef(false);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
+
+  const trackEvent = (name, props) => {
+    if (!sessionId) return;
+    postJSON('/event', { name, session_id: sessionId, props: props || {} });
+  };
 
   const checkChipsScroll = () => {
     const el = chipsRef.current;
@@ -239,83 +313,162 @@ export default function ChatWidget() {
     return () => el.removeEventListener('scroll', checkChipsScroll);
   }, [isOpen, showSuggestions]);
 
-  // Generate a fresh session ID on every mount — chat resets on page refresh
+  // Fresh session ID on every mount — chat resets on page refresh (intentional, no persistence).
   useEffect(() => {
     setSessionId(Math.random().toString(36).substring(2, 11) + Date.now().toString(36));
-    try { localStorage.removeItem('stackular_chat_v1'); } catch {}
   }, []);
+
+  // Fire chat_started once, the first time the widget is opened.
+  useEffect(() => {
+    if (isOpen && sessionId && !chatStartedRef.current) {
+      chatStartedRef.current = true;
+      trackEvent('chat_started');
+    }
+  }, [isOpen, sessionId]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, isLoading, showLeadCapture]);
+  }, [messages, isLoading]);
 
   useEffect(() => {
     if (isOpen) setTimeout(() => inputRef.current?.focus(), 300);
   }, [isOpen]);
 
-  const fetchAnswer = async (question) => {
+  const fetchAnswer = async (question, { isRetry = false } = {}) => {
     const isHighIntent = HIGH_INTENT.test(question);
+    lastQuestionRef.current = question;
     setIsLoading(true);
-    setMessages(prev => [...prev, { role: 'user', text: question }]);
+    setIsStreaming(true);
+    if (!isRetry) {
+      setMessages(prev => [...prev, { role: 'user', text: question }]);
+    }
+
+    trackEvent('message_sent', { high_intent: isHighIntent });
+    if (isHighIntent) trackEvent('high_intent_matched');
+
+    const controller = new AbortController();
+    abortRef.current = controller;
+
+    // Local accumulators for this single response (loop is single-threaded).
+    const botId = `bot-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    let fullText = '';
+    let sources = [];
+    let errored = false;
+    let aborted = false;
+
+    // Whether to append or replace-last is decided from the actual queued state
+    // (matching on botId), not an external flag. setMessages(prev => ...) only
+    // *schedules* the updater — React may run several queued updaters back to
+    // back later, so a plain outer-scope "already created?" flag can flip true
+    // before earlier updaters actually run, making them replace the prior
+    // message (the visitor's own bubble) instead of appending the new one.
+    const writeBot = () => {
+      const payload = { role: 'bot', id: botId, text: fullText, sources, error: errored };
+      setMessages(prev => {
+        const last = prev[prev.length - 1];
+        if (last?.id === botId) {
+          const next = [...prev];
+          next[next.length - 1] = payload;
+          return next;
+        }
+        return [...prev, payload];
+      });
+    };
 
     try {
       const res = await fetch(`${API_URL}/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ question, session_id: sessionId }),
+        signal: controller.signal,
       });
-
-      if (!res.ok) throw new Error('API Error');
+      if (!res.ok) throw new Error(`API ${res.status}`);
 
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
-      let fullText = '';
-      let isFirstChunk = true;
+      let buffer = '';
 
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
-        const chunk = decoder.decode(value, { stream: true });
-        fullText += chunk;
-        if (isFirstChunk && chunk.trim()) {
-          setIsLoading(false);
-          setMessages(prev => [...prev, { role: 'bot', text: fullText }]);
-          isFirstChunk = false;
-        } else if (!isFirstChunk) {
-          setMessages(prev => {
-            const next = [...prev];
-            next[next.length - 1] = { role: 'bot', text: fullText };
-            return next;
-          });
+        buffer += decoder.decode(value, { stream: true });
+
+        let sep;
+        while ((sep = buffer.indexOf('\n\n')) !== -1) {
+          const block = buffer.slice(0, sep);
+          buffer = buffer.slice(sep + 2);
+          const dataLine = block.split('\n').find(l => l.startsWith('data:'));
+          if (!dataLine) continue;
+          let evt;
+          try { evt = JSON.parse(dataLine.slice(5).trim()); } catch { continue; }
+
+          if (evt.type === 'sources') {
+            sources = Array.isArray(evt.data) ? evt.data : [];
+            writeBot();
+          } else if (evt.type === 'token') {
+            setIsLoading(false); // hide typing indicator once text starts (no-op if already false)
+            fullText += evt.data;
+            writeBot();
+          } else if (evt.type === 'error') {
+            errored = true;
+            fullText = evt.data || 'Something went wrong. Please try again.';
+            sources = [];
+            writeBot();
+          }
+          // 'done' needs no extra handling.
         }
       }
-      decoder.decode(); // flush
-
-      setBotExchangeCount(c => c + 1);
-      if (isHighIntent && !leadDismissed) setShowLeadCapture(true);
+      decoder.decode();
     } catch (err) {
-      console.error('Streaming error:', err);
+      if (err.name === 'AbortError') {
+        aborted = true;
+      } else {
+        console.error('Streaming error:', err);
+        errored = true;
+        fullText = "I'm having trouble connecting right now. Please try again, or visit [stackular.com](https://www.stackular.com/contact-us) directly.";
+        sources = [];
+        writeBot();
+      }
+    } finally {
       setIsLoading(false);
-      setMessages(prev => [...prev, {
-        role: 'bot',
-        text: "I'm having trouble connecting right now. Please visit [stackular.com](https://www.stackular.com/contact-us) directly.",
-      }]);
+      setIsStreaming(false);
+      abortRef.current = null;
     }
-    setIsLoading(false);
+
+    if (!errored && !aborted) {
+      setBotExchangeCount(c => c + 1);
+    }
   };
 
-  const handleLeadSubmit = (email) => {
-    setShowLeadCapture(false);
-    setLeadDismissed(true);
-    setMessages(prev => [...prev, {
-      role: 'bot',
-      text: `Thanks! We've noted your email (${email}) and someone from the Stackular team will be in touch shortly. In the meantime, feel free to keep asking questions.`,
-    }]);
+  const stopStreaming = () => {
+    abortRef.current?.abort();
+    trackEvent('stop_clicked');
   };
 
-  const handleLeadDismiss = () => {
-    setShowLeadCapture(false);
-    setLeadDismissed(true);
+  const handleRetry = () => {
+    trackEvent('retry_clicked');
+    // Drop the errored bot message, then re-ask without re-adding the user message.
+    setMessages(prev => {
+      const next = [...prev];
+      if (next.length && next[next.length - 1].role === 'bot' && next[next.length - 1].error) {
+        next.pop();
+      }
+      return next;
+    });
+    fetchAnswer(lastQuestionRef.current, { isRetry: true });
+  };
+
+  const handleCopy = (msg) => {
+    try {
+      navigator.clipboard?.writeText(msg.text);
+      setCopiedId(msg.id);
+      setTimeout(() => setCopiedId(c => (c === msg.id ? null : c)), 1500);
+    } catch { /* clipboard unavailable */ }
+  };
+
+  const handleFeedback = (msg, rating) => {
+    setMessages(prev => prev.map(m => (m.id === msg.id ? { ...m, feedback: rating } : m)));
+    postJSON('/feedback', { session_id: sessionId, message_id: msg.id, rating });
   };
 
   const toggleListening = () => {
@@ -345,19 +498,20 @@ export default function ChatWidget() {
 
   const handleSend = () => {
     const text = input.trim();
-    if (!text || isLoading) return;
+    if (!text || isStreaming) return;
     setInput('');
     setShowSuggestions(false);
-    setShowLeadCapture(false);
     fetchAnswer(text);
   };
 
   const handleChip = (text) => {
+    if (isStreaming) return;
     setShowSuggestions(false);
+    trackEvent('chip_clicked', { text });
     fetchAnswer(text);
   };
 
-  const showHumanCTA = botExchangeCount >= 3 && !leadDismissed;
+  const showHumanCTA = botExchangeCount >= 3;
 
   return (
     <div style={{ fontFamily: "'Inter', 'Segoe UI', sans-serif" }}>
@@ -392,14 +546,14 @@ export default function ChatWidget() {
           e.currentTarget.style.transform = 'scale(1) rotate(0deg)';
           e.currentTarget.style.boxShadow = '0 8px 24px rgba(29, 110, 245, 0.35)';
         }}
-        aria-label="Open chat"
+        aria-label={isOpen ? 'Close chat' : 'Open chat'}
       >
         {isOpen ? (
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="white">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="white" aria-hidden="true">
             <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" stroke="white" strokeWidth="0.5"/>
           </svg>
         ) : (
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="white">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="white" aria-hidden="true">
             <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/>
           </svg>
         )}
@@ -419,7 +573,9 @@ export default function ChatWidget() {
           overflow: 'hidden', zIndex: 9998,
           boxShadow: '0 12px 48px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.05)',
           animation: 'widgetOpen 0.4s cubic-bezier(0.16, 1, 0.3, 1)',
-        }}>
+        }}
+        role="dialog"
+        aria-label="Stackular AI Assistant">
 
           {/* Header */}
           <div style={{
@@ -433,7 +589,7 @@ export default function ChatWidget() {
               background: 'rgba(29, 110, 245, 0.1)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
             }}>
-              <svg width="22" height="22" viewBox="0 0 32 32" fill="none">
+              <svg width="22" height="22" viewBox="0 0 32 32" fill="none" aria-hidden="true">
                 <rect width="10" height="10" rx="2" fill="#1d6ef5"/>
                 <rect x="13" width="10" height="10" rx="2" fill="#1d6ef5" opacity="0.6"/>
                 <rect y="13" width="10" height="10" rx="2" fill="#1d6ef5" opacity="0.6"/>
@@ -449,15 +605,26 @@ export default function ChatWidget() {
           </div>
 
           {/* Messages */}
-          <div style={{
-            flex: 1, overflowY: 'auto', padding: '20px',
-            display: 'flex', flexDirection: 'column', gap: 14,
-          }}>
-            {messages.map((msg, i) => <Message key={i} role={msg.role} text={msg.text} />)}
+          <div
+            style={{
+              flex: 1, overflowY: 'auto', padding: '20px',
+              display: 'flex', flexDirection: 'column', gap: 14,
+            }}
+            role="log"
+            aria-live="polite"
+            aria-relevant="additions text"
+          >
+            {messages.map((msg, i) => (
+              <Message
+                key={msg.id || i}
+                msg={msg}
+                onCopy={handleCopy}
+                onFeedback={handleFeedback}
+                onRetry={handleRetry}
+                copied={copiedId === msg.id}
+              />
+            ))}
             {isLoading && <TypingIndicator />}
-            {showLeadCapture && !isLoading && (
-              <LeadCaptureCard onSubmit={handleLeadSubmit} onDismiss={handleLeadDismiss} />
-            )}
             <div ref={messagesEndRef} />
           </div>
 
@@ -466,7 +633,7 @@ export default function ChatWidget() {
             <div style={{ position: 'relative', flexShrink: 0 }}>
               <style>{`.chip-row::-webkit-scrollbar { display: none; }`}</style>
               {canScrollLeft && (
-                <button onClick={() => chipsRef.current.scrollBy({ left: -130, behavior: 'smooth' })} style={{
+                <button onClick={() => chipsRef.current.scrollBy({ left: -130, behavior: 'smooth' })} aria-label="Scroll suggestions left" style={{
                   position: 'absolute', left: 4, top: '40%', transform: 'translateY(-50%)', zIndex: 2,
                   width: 24, height: 24, borderRadius: '50%',
                   background: 'rgba(20,20,32,0.95)', border: '1px solid rgba(255,255,255,0.18)',
@@ -475,7 +642,7 @@ export default function ChatWidget() {
                 }}>‹</button>
               )}
               {canScrollRight && (
-                <button onClick={() => chipsRef.current.scrollBy({ left: 130, behavior: 'smooth' })} style={{
+                <button onClick={() => chipsRef.current.scrollBy({ left: 130, behavior: 'smooth' })} aria-label="Scroll suggestions right" style={{
                   position: 'absolute', right: 4, top: '40%', transform: 'translateY(-50%)', zIndex: 2,
                   width: 24, height: 24, borderRadius: '50%',
                   background: 'rgba(20,20,32,0.95)', border: '1px solid rgba(255,255,255,0.18)',
@@ -525,6 +692,7 @@ export default function ChatWidget() {
                 href="https://www.stackular.com/contact-us"
                 target="_blank"
                 rel="noopener noreferrer"
+                onClick={() => trackEvent('cta_clicked', { location: 'cta_bar' })}
                 style={{ fontSize: 11, color: '#1d6ef5', fontWeight: 600, textDecoration: 'none' }}
                 onMouseEnter={e => e.currentTarget.style.textDecoration = 'underline'}
                 onMouseLeave={e => e.currentTarget.style.textDecoration = 'none'}
@@ -544,6 +712,7 @@ export default function ChatWidget() {
           }}>
             <button
               onClick={toggleListening}
+              aria-label={isListening ? 'Stop voice input' : 'Start voice input'}
               style={{
                 background: isListening ? '#ef4444' : 'transparent',
                 border: 'none', cursor: 'pointer', padding: 4, borderRadius: '50%',
@@ -554,7 +723,7 @@ export default function ChatWidget() {
               }}
               title={isListening ? 'Stop Listening' : 'Voice Typing'}
             >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill={isListening ? 'white' : 'rgba(255,255,255,0.45)'}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill={isListening ? 'white' : 'rgba(255,255,255,0.45)'} aria-hidden="true">
                 <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
                 <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
               </svg>
@@ -565,6 +734,7 @@ export default function ChatWidget() {
               onChange={e => setInput(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && handleSend()}
               placeholder={isListening ? 'Listening...' : 'Type your message...'}
+              aria-label="Type your message"
               maxLength={1000}
               style={{
                 flex: 1, border: 'none', background: 'transparent',
@@ -572,23 +742,42 @@ export default function ChatWidget() {
                 color: '#ffffff',
               }}
             />
-            <button
-              onClick={handleSend}
-              disabled={isLoading || !input.trim()}
-              style={{
-                width: 36, height: 36, borderRadius: 10,
-                background: isLoading || !input.trim() ? 'rgba(255, 255, 255, 0.05)' : '#1d6ef5',
-                border: 'none',
-                cursor: isLoading || !input.trim() ? 'not-allowed' : 'pointer',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                transition: 'all 0.2s ease', flexShrink: 0,
-                boxShadow: isLoading || !input.trim() ? 'none' : '0 4px 12px rgba(29, 110, 245, 0.3)',
-              }}
-            >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="white">
-                <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
-              </svg>
-            </button>
+            {isStreaming ? (
+              <button
+                onClick={stopStreaming}
+                aria-label="Stop generating"
+                title="Stop"
+                style={{
+                  width: 36, height: 36, borderRadius: 10,
+                  background: '#ef4444', border: 'none', cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  transition: 'all 0.2s ease', flexShrink: 0,
+                }}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="white" aria-hidden="true">
+                  <rect x="5" y="5" width="14" height="14" rx="2" />
+                </svg>
+              </button>
+            ) : (
+              <button
+                onClick={handleSend}
+                disabled={!input.trim()}
+                aria-label="Send message"
+                style={{
+                  width: 36, height: 36, borderRadius: 10,
+                  background: !input.trim() ? 'rgba(255, 255, 255, 0.05)' : '#1d6ef5',
+                  border: 'none',
+                  cursor: !input.trim() ? 'not-allowed' : 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  transition: 'all 0.2s ease', flexShrink: 0,
+                  boxShadow: !input.trim() ? 'none' : '0 4px 12px rgba(29, 110, 245, 0.3)',
+                }}
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="white" aria-hidden="true">
+                  <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+                </svg>
+              </button>
+            )}
           </div>
 
           <div style={{ background: 'rgba(0,0,0,0.2)', textAlign: 'center', padding: '0 0 10px', flexShrink: 0 }}>

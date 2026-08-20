@@ -1,0 +1,16 @@
+{"question": "What services does Stackular offer?", "expect_any": ["cloud", "digital experience", "data intelligence", "product development"]}
+{"question": "Who founded Stackular?", "expect_any": ["jason storch", "venkat varkala"]}
+{"question": "When was Stackular founded?", "expect_any": ["2015"]}
+{"question": "Where is Stackular headquartered?", "expect_any": ["columbia", "maryland"]}
+{"question": "Does Stackular have an office in India?", "expect_any": ["hyderabad", "india"]}
+{"question": "How can I contact Stackular?", "expect_any": ["contact-us", "contact"]}
+{"question": "Where can I find open job positions?", "expect_any": ["joinus", "position", "career", "join"]}
+{"question": "Where is Stackular's project portfolio?", "expect_any": ["portfolio"]}
+{"question": "What cloud platforms does Stackular work with?", "expect_any": ["aws", "azure", "gcp", "cloud"]}
+{"question": "Does Stackular do UI/UX design?", "expect_any": ["ui/ux", "ux", "design", "digital experience"]}
+{"question": "What does Stackular's Data Intelligence service include?", "expect_any": ["business intelligence", "data visualization", "ai", "analytics"]}
+{"question": "Does Stackular build AI products?", "expect_any": ["ai", "product development", "intelligence"]}
+{"question": "Where can I read the privacy policy?", "expect_any": ["privacy-policy", "privacy"]}
+{"question": "Tell me more about the second one", "history": [{"q": "What services do you offer?", "a": "We offer five core service areas: Cloud Infrastructure, Digital Experience, Data Intelligence, Enterprise Systems, and Product Development."}], "expect_any": ["digital experience", "ux", "ui/ux", "design", "branding"]}
+{"question": "What platforms does it support?", "history": [{"q": "Tell me about your cloud services.", "a": "Our Cloud Infrastructure practice covers cloud automation, modernization, and managed services."}], "expect_any": ["aws", "azure", "gcp", "cloud"]}
+{"question": "How do I get in touch with them?", "history": [{"q": "Who founded Stackular?", "a": "Stackular was founded by Jason Storch and Venkat Varkala in 2015."}], "expect_any": ["contact", "contact-us"]}

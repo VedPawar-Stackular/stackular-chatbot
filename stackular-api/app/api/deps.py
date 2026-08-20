@@ -7,6 +7,7 @@ EMBEDDING_DIM = 384
 
 _embedder = None
 _index = None
+_pc = None
 
 
 def get_embedder():
@@ -17,11 +18,23 @@ def get_embedder():
     return _embedder
 
 
+def get_pinecone_client():
+    """Lazy singleton for the Pinecone client.
+
+    Shared by get_index() and the reranker (rag_service._rerank) so we only
+    instantiate one client and reuse its connection pool.
+    """
+    global _pc
+    if _pc is None:
+        print("Connecting to Pinecone...")
+        _pc = Pinecone(api_key=settings.PINECONE_API_KEY)
+    return _pc
+
+
 def get_index():
     global _index
     if _index is None:
-        print("Connecting to Pinecone...")
-        pc = Pinecone(api_key=settings.PINECONE_API_KEY)
+        pc = get_pinecone_client()
         existing = [idx.name for idx in pc.list_indexes()]
         if INDEX_NAME not in existing:
             print(f"  Creating Pinecone index '{INDEX_NAME}' (dotproduct, {EMBEDDING_DIM}-dim)...")

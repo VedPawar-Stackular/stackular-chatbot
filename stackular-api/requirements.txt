@@ -1,6 +1,6 @@
 fastapi
 uvicorn
-pinecone
+pinecone>=6,<9
 sentence-transformers
 langchain-groq
 langchain-core
@@ -8,3 +8,4 @@ langchain-text-splitters
 python-dotenv
 pydantic
 pinecone-text
+slowapi
